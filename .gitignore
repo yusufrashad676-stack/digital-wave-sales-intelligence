@@ -1,0 +1,25 @@
+# dependencies
+node_modules/
+
+# environment
+.env
+.env.*.local
+
+# generated Prisma client
+/generated/prisma
+
+# OS / editor
+.DS_Store
+
+# agent tooling configuration (machine-specific)
+.agents/
+.claude/
+.windsurf/
+
+# logs / caches / build artifacts
+*.log
+npm-debug.log*
+coverage/
+dist/
+build/
+.turbo/

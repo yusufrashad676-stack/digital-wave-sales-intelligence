@@ -1,0 +1,1208 @@
+// Phase 1 Foundation Schema — Digital Wave Sales Intelligence Platform
+// Status: DATABASE DESIGN FREEZE v1.0 (docs/MASTER_ARCHITECTURE.md §16)
+// Scope: foundation models only (ADR-005 … ADR-010). No migrations, no seed.
+// Conventions (docs/DATABASE_RULES.md):
+//   - every column mapped to snake_case via @map; every table via @@map
+//   - every FK column indexed (incl. audit actor columns)
+//   - join-table pair identity via plain @@unique (re-assignment = restore)
+//   - soft-delete-aware uniqueness via SQL partial indexes (ADR-005, registry in
+//     DATABASE_RULES.md) created after the Prisma migration — never @@unique([x, deletedAt])
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserStatus {
+  REGISTERED
+  ACTIVE
+  DISABLED
+}
+
+enum WorkspaceStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum WorkspaceOwnerModel {
+  SINGLE
+  MULTI
+}
+
+enum RoleKind {
+  SYSTEM
+  CUSTOM
+}
+
+enum RoleStatus {
+  CREATED
+  ACTIVE
+  DEPRECATED
+}
+
+enum PermissionScope {
+  PLATFORM
+  SCOPED
+}
+
+enum PermissionStatus {
+  INTRODUCED
+  ACTIVE
+  DEPRECATED
+}
+
+enum PermissionGroupKind {
+  DOMAIN
+  CAPABILITY_LEVEL
+}
+
+enum CompanyStatus {
+  ACTIVE
+  INACTIVE
+  DORMANT
+}
+
+enum BranchStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model User {
+  id          String     @id @default(uuid()) @map("id")
+  email       String     @unique(map: "uq_users_email") @map("email") @db.VarChar(320)
+  displayName String     @map("display_name") @db.VarChar(255)
+  status      UserStatus @default(REGISTERED) @map("status")
+  preferences Json?      @map("preferences")
+  lastLoginAt DateTime?  @map("last_login_at") @db.Timestamptz
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("UserUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("UserDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  roleAssignments RoleAssignment[]
+  userWorkspaces  UserWorkspace[]
+
+  createdUsers                  User[]                 @relation("UserCreatedBy")
+  updatedUsers                  User[]                 @relation("UserUpdatedBy")
+  deletedUsers                  User[]                 @relation("UserDeletedBy")
+  createdWorkspaces             Workspace[]            @relation("WorkspaceCreatedBy")
+  updatedWorkspaces             Workspace[]            @relation("WorkspaceUpdatedBy")
+  deletedWorkspaces             Workspace[]            @relation("WorkspaceDeletedBy")
+  createdRoles                  Role[]                 @relation("RoleCreatedBy")
+  updatedRoles                  Role[]                 @relation("RoleUpdatedBy")
+  deletedRoles                  Role[]                 @relation("RoleDeletedBy")
+  createdPermissions            Permission[]           @relation("PermissionCreatedBy")
+  updatedPermissions            Permission[]           @relation("PermissionUpdatedBy")
+  deletedPermissions            Permission[]           @relation("PermissionDeletedBy")
+  createdRoleAssignments        RoleAssignment[]       @relation("RoleAssignmentCreatedBy")
+  updatedRoleAssignments        RoleAssignment[]       @relation("RoleAssignmentUpdatedBy")
+  deletedRoleAssignments        RoleAssignment[]       @relation("RoleAssignmentDeletedBy")
+  assignedRoleAssignments       RoleAssignment[]       @relation("RoleAssignmentAssignedBy")
+  createdRolePermissions        RolePermission[]       @relation("RolePermissionCreatedBy")
+  updatedRolePermissions        RolePermission[]       @relation("RolePermissionUpdatedBy")
+  deletedRolePermissions        RolePermission[]       @relation("RolePermissionDeletedBy")
+  assignedRolePermissions       RolePermission[]       @relation("RolePermissionAssignedBy")
+  createdUserWorkspaces         UserWorkspace[]        @relation("UserWorkspaceCreatedBy")
+  updatedUserWorkspaces         UserWorkspace[]        @relation("UserWorkspaceUpdatedBy")
+  deletedUserWorkspaces         UserWorkspace[]        @relation("UserWorkspaceDeletedBy")
+  assignedUserWorkspaces        UserWorkspace[]        @relation("UserWorkspaceAssignedBy")
+  createdCompanies              Company[]              @relation("CompanyCreatedBy")
+  updatedCompanies              Company[]              @relation("CompanyUpdatedBy")
+  deletedCompanies              Company[]              @relation("CompanyDeletedBy")
+  createdBranches               Branch[]               @relation("BranchCreatedBy")
+  updatedBranches               Branch[]               @relation("BranchUpdatedBy")
+  deletedBranches               Branch[]               @relation("BranchDeletedBy")
+  createdPeople                 Person[]               @relation("PersonCreatedBy")
+  updatedPeople                 Person[]               @relation("PersonUpdatedBy")
+  deletedPeople                 Person[]               @relation("PersonDeletedBy")
+  createdAddresses              Address[]              @relation("AddressCreatedBy")
+  updatedAddresses              Address[]              @relation("AddressUpdatedBy")
+  deletedAddresses              Address[]              @relation("AddressDeletedBy")
+  createdWebsites               Website[]              @relation("WebsiteCreatedBy")
+  updatedWebsites               Website[]              @relation("WebsiteUpdatedBy")
+  deletedWebsites               Website[]              @relation("WebsiteDeletedBy")
+  createdSocialProfiles         SocialProfile[]        @relation("SocialProfileCreatedBy")
+  updatedSocialProfiles         SocialProfile[]        @relation("SocialProfileUpdatedBy")
+  deletedSocialProfiles         SocialProfile[]        @relation("SocialProfileDeletedBy")
+  createdContactMethods         ContactMethod[]        @relation("ContactMethodCreatedBy")
+  updatedContactMethods         ContactMethod[]        @relation("ContactMethodUpdatedBy")
+  deletedContactMethods         ContactMethod[]        @relation("ContactMethodDeletedBy")
+  createdTags                   Tag[]                  @relation("TagCreatedBy")
+  updatedTags                   Tag[]                  @relation("TagUpdatedBy")
+  deletedTags                   Tag[]                  @relation("TagDeletedBy")
+  createdCategories             Category[]             @relation("CategoryCreatedBy")
+  updatedCategories             Category[]             @relation("CategoryUpdatedBy")
+  deletedCategories             Category[]             @relation("CategoryDeletedBy")
+  createdEmployments            Employment[]           @relation("EmploymentCreatedBy")
+  updatedEmployments            Employment[]           @relation("EmploymentUpdatedBy")
+  deletedEmployments            Employment[]           @relation("EmploymentDeletedBy")
+  createdCompanyAddresses       CompanyAddress[]       @relation("CompanyAddressCreatedBy")
+  updatedCompanyAddresses       CompanyAddress[]       @relation("CompanyAddressUpdatedBy")
+  deletedCompanyAddresses       CompanyAddress[]       @relation("CompanyAddressDeletedBy")
+  assignedCompanyAddresses      CompanyAddress[]       @relation("CompanyAddressAssignedBy")
+  createdBranchAddresses        BranchAddress[]        @relation("BranchAddressCreatedBy")
+  updatedBranchAddresses        BranchAddress[]        @relation("BranchAddressUpdatedBy")
+  deletedBranchAddresses        BranchAddress[]        @relation("BranchAddressDeletedBy")
+  assignedBranchAddresses       BranchAddress[]        @relation("BranchAddressAssignedBy")
+  createdPersonContactMethods   PersonContactMethod[]  @relation("PersonContactMethodCreatedBy")
+  updatedPersonContactMethods   PersonContactMethod[]  @relation("PersonContactMethodUpdatedBy")
+  deletedPersonContactMethods   PersonContactMethod[]  @relation("PersonContactMethodDeletedBy")
+  assignedPersonContactMethods  PersonContactMethod[]  @relation("PersonContactMethodAssignedBy")
+  createdCompanyContactMethods  CompanyContactMethod[] @relation("CompanyContactMethodCreatedBy")
+  updatedCompanyContactMethods  CompanyContactMethod[] @relation("CompanyContactMethodUpdatedBy")
+  deletedCompanyContactMethods  CompanyContactMethod[] @relation("CompanyContactMethodDeletedBy")
+  assignedCompanyContactMethods CompanyContactMethod[] @relation("CompanyContactMethodAssignedBy")
+  createdBranchContactMethods   BranchContactMethod[]  @relation("BranchContactMethodCreatedBy")
+  updatedBranchContactMethods   BranchContactMethod[]  @relation("BranchContactMethodUpdatedBy")
+  deletedBranchContactMethods   BranchContactMethod[]  @relation("BranchContactMethodDeletedBy")
+  assignedBranchContactMethods  BranchContactMethod[]  @relation("BranchContactMethodAssignedBy")
+  createdCompanyWebsites        CompanyWebsite[]       @relation("CompanyWebsiteCreatedBy")
+  updatedCompanyWebsites        CompanyWebsite[]       @relation("CompanyWebsiteUpdatedBy")
+  deletedCompanyWebsites        CompanyWebsite[]       @relation("CompanyWebsiteDeletedBy")
+  assignedCompanyWebsites       CompanyWebsite[]       @relation("CompanyWebsiteAssignedBy")
+  createdBranchWebsites         BranchWebsite[]        @relation("BranchWebsiteCreatedBy")
+  updatedBranchWebsites         BranchWebsite[]        @relation("BranchWebsiteUpdatedBy")
+  deletedBranchWebsites         BranchWebsite[]        @relation("BranchWebsiteDeletedBy")
+  assignedBranchWebsites        BranchWebsite[]        @relation("BranchWebsiteAssignedBy")
+  createdPersonSocialProfiles   PersonSocialProfile[]  @relation("PersonSocialProfileCreatedBy")
+  updatedPersonSocialProfiles   PersonSocialProfile[]  @relation("PersonSocialProfileUpdatedBy")
+  deletedPersonSocialProfiles   PersonSocialProfile[]  @relation("PersonSocialProfileDeletedBy")
+  assignedPersonSocialProfiles  PersonSocialProfile[]  @relation("PersonSocialProfileAssignedBy")
+  createdCompanySocialProfiles  CompanySocialProfile[] @relation("CompanySocialProfileCreatedBy")
+  updatedCompanySocialProfiles  CompanySocialProfile[] @relation("CompanySocialProfileUpdatedBy")
+  deletedCompanySocialProfiles  CompanySocialProfile[] @relation("CompanySocialProfileDeletedBy")
+  assignedCompanySocialProfiles CompanySocialProfile[] @relation("CompanySocialProfileAssignedBy")
+  createdBranchSocialProfiles   BranchSocialProfile[]  @relation("BranchSocialProfileCreatedBy")
+  updatedBranchSocialProfiles   BranchSocialProfile[]  @relation("BranchSocialProfileUpdatedBy")
+  deletedBranchSocialProfiles   BranchSocialProfile[]  @relation("BranchSocialProfileDeletedBy")
+  assignedBranchSocialProfiles  BranchSocialProfile[]  @relation("BranchSocialProfileAssignedBy")
+  createdCompanyTags            CompanyTag[]           @relation("CompanyTagCreatedBy")
+  updatedCompanyTags            CompanyTag[]           @relation("CompanyTagUpdatedBy")
+  deletedCompanyTags            CompanyTag[]           @relation("CompanyTagDeletedBy")
+  assignedCompanyTags           CompanyTag[]           @relation("CompanyTagAssignedBy")
+  createdPersonTags             PersonTag[]            @relation("PersonTagCreatedBy")
+  updatedPersonTags             PersonTag[]            @relation("PersonTagUpdatedBy")
+  deletedPersonTags             PersonTag[]            @relation("PersonTagDeletedBy")
+  assignedPersonTags            PersonTag[]            @relation("PersonTagAssignedBy")
+  createdCompanyCategories      CompanyCategory[]      @relation("CompanyCategoryCreatedBy")
+  updatedCompanyCategories      CompanyCategory[]      @relation("CompanyCategoryUpdatedBy")
+  deletedCompanyCategories      CompanyCategory[]      @relation("CompanyCategoryDeletedBy")
+  assignedCompanyCategories     CompanyCategory[]      @relation("CompanyCategoryAssignedBy")
+
+  @@index([status], map: "idx_users_status")
+  @@index([lastLoginAt], map: "idx_users_last_login_at")
+  @@index([createdById], map: "idx_users_created_by_id")
+  @@index([updatedById], map: "idx_users_updated_by_id")
+  @@index([deletedById], map: "idx_users_deleted_by_id")
+  @@map("users")
+}
+
+model Workspace {
+  id              String              @id @default(uuid()) @map("id")
+  code            String              @unique(map: "uq_workspaces_code") @map("code") @db.VarChar(64)
+  name            String              @map("name") @db.VarChar(255)
+  status          WorkspaceStatus     @default(ACTIVE) @map("status")
+  ownerModel      WorkspaceOwnerModel @default(SINGLE) @map("owner_model")
+  defaultSettings Json?               @map("default_settings")
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("WorkspaceCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("WorkspaceUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("WorkspaceDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  users UserWorkspace[] @relation("UserWorkspaceWorkspace")
+  roles Role[]          @relation("RoleWorkspace")
+
+  @@index([status], map: "idx_workspaces_status")
+  @@index([createdById], map: "idx_workspaces_created_by_id")
+  @@index([updatedById], map: "idx_workspaces_updated_by_id")
+  @@index([deletedById], map: "idx_workspaces_deleted_by_id")
+  @@map("workspaces")
+}
+
+model Role {
+  id          String     @id @default(uuid()) @map("id")
+  code        String     @unique(map: "uq_roles_code") @map("code") @db.VarChar(64)
+  name        String     @map("name") @db.VarChar(255)
+  description String?    @map("description") @db.VarChar(2000)
+  kind        RoleKind   @default(CUSTOM) @map("kind")
+  status      RoleStatus @default(CREATED) @map("status")
+  parentId    String?    @map("parent_id")
+  parent      Role?      @relation("RoleHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children    Role[]     @relation("RoleHierarchy")
+  workspaceId String?    @map("workspace_id")
+  workspace   Workspace? @relation("RoleWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("RoleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("RoleUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("RoleDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  roleAssignments RoleAssignment[]
+  rolePermissions RolePermission[]
+
+  @@index([status], map: "idx_roles_status")
+  @@index([parentId], map: "idx_roles_parent_id")
+  @@index([workspaceId], map: "idx_roles_workspace_id")
+  @@index([createdById], map: "idx_roles_created_by_id")
+  @@index([updatedById], map: "idx_roles_updated_by_id")
+  @@index([deletedById], map: "idx_roles_deleted_by_id")
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(uuid()) @map("id")
+  code        String           @unique(map: "uq_permissions_code") @map("code") @db.VarChar(128)
+  name        String           @map("name") @db.VarChar(255)
+  groupId     String           @map("group_id")
+  group       PermissionGroup  @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  scope       PermissionScope  @default(PLATFORM) @map("scope")
+  description String?          @map("description") @db.VarChar(2000)
+  status      PermissionStatus @default(INTRODUCED) @map("status")
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("PermissionCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("PermissionUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("PermissionDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  rolePermissions RolePermission[]
+
+  @@index([groupId], map: "idx_permissions_group_id")
+  @@index([status], map: "idx_permissions_status")
+  @@index([createdById], map: "idx_permissions_created_by_id")
+  @@index([updatedById], map: "idx_permissions_updated_by_id")
+  @@index([deletedById], map: "idx_permissions_deleted_by_id")
+  @@map("permissions")
+}
+
+model RoleAssignment {
+  id           String    @id @default(uuid()) @map("id")
+  userId       String    @map("user_id")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  roleId       String    @map("role_id")
+  role         Role      @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  assignedById String?   @map("assigned_by_id")
+  assignedBy   User?     @relation("RoleAssignmentAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt   DateTime? @map("assigned_at") @db.Timestamptz
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("RoleAssignmentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("RoleAssignmentUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("RoleAssignmentDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@unique([userId, roleId], map: "uq_role_assignments_user_id_role_id")
+  @@index([userId], map: "idx_role_assignments_user_id")
+  @@index([roleId], map: "idx_role_assignments_role_id")
+  @@index([assignedById], map: "idx_role_assignments_assigned_by_id")
+  @@index([createdById], map: "idx_role_assignments_created_by_id")
+  @@index([updatedById], map: "idx_role_assignments_updated_by_id")
+  @@index([deletedById], map: "idx_role_assignments_deleted_by_id")
+  @@map("role_assignments")
+}
+
+model RolePermission {
+  id           String     @id @default(uuid()) @map("id")
+  roleId       String     @map("role_id")
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  permissionId String     @map("permission_id")
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Restrict)
+  assignedById String?    @map("assigned_by_id")
+  assignedBy   User?      @relation("RolePermissionAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt   DateTime?  @map("assigned_at") @db.Timestamptz
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("RolePermissionCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("RolePermissionUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("RolePermissionDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@unique([roleId, permissionId], map: "uq_role_permissions_role_id_permission_id")
+  @@index([roleId], map: "idx_role_permissions_role_id")
+  @@index([permissionId], map: "idx_role_permissions_permission_id")
+  @@index([assignedById], map: "idx_role_permissions_assigned_by_id")
+  @@index([createdById], map: "idx_role_permissions_created_by_id")
+  @@index([updatedById], map: "idx_role_permissions_updated_by_id")
+  @@index([deletedById], map: "idx_role_permissions_deleted_by_id")
+  @@map("role_permissions")
+}
+
+model UserWorkspace {
+  id           String    @id @default(uuid()) @map("id")
+  userId       String    @map("user_id")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  workspaceId  String    @map("workspace_id")
+  workspace    Workspace @relation("UserWorkspaceWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict)
+  assignedById String?   @map("assigned_by_id")
+  assignedBy   User?     @relation("UserWorkspaceAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt   DateTime? @map("assigned_at") @db.Timestamptz
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("UserWorkspaceCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("UserWorkspaceUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("UserWorkspaceDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@unique([userId, workspaceId], map: "uq_user_workspaces_user_id_workspace_id")
+  @@index([userId], map: "idx_user_workspaces_user_id")
+  @@index([workspaceId], map: "idx_user_workspaces_workspace_id")
+  @@index([assignedById], map: "idx_user_workspaces_assigned_by_id")
+  @@index([createdById], map: "idx_user_workspaces_created_by_id")
+  @@index([updatedById], map: "idx_user_workspaces_updated_by_id")
+  @@index([deletedById], map: "idx_user_workspaces_deleted_by_id")
+  @@map("user_workspaces")
+}
+
+model ContactMethodType {
+  id          String   @id @default(uuid()) @map("id")
+  code        String   @unique(map: "uq_contact_method_types_code") @map("code") @db.VarChar(64)
+  name        String   @map("name") @db.VarChar(255)
+  description String?  @map("description") @db.VarChar(2000)
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  contactMethods ContactMethod[]
+
+  @@index([isActive], map: "idx_contact_method_types_is_active")
+  @@map("contact_method_types")
+}
+
+model SocialPlatform {
+  id          String   @id @default(uuid()) @map("id")
+  code        String   @unique(map: "uq_social_platforms_code") @map("code") @db.VarChar(64)
+  name        String   @map("name") @db.VarChar(255)
+  description String?  @map("description") @db.VarChar(2000)
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  socialProfiles SocialProfile[]
+
+  @@index([isActive], map: "idx_social_platforms_is_active")
+  @@map("social_platforms")
+}
+
+model RoleLevel {
+  id          String   @id @default(uuid()) @map("id")
+  code        String   @unique(map: "uq_role_levels_code") @map("code") @db.VarChar(64)
+  name        String   @map("name") @db.VarChar(255)
+  description String?  @map("description") @db.VarChar(2000)
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  employments Employment[]
+
+  @@index([isActive], map: "idx_role_levels_is_active")
+  @@map("role_levels")
+}
+
+model PermissionGroup {
+  id          String              @id @default(uuid()) @map("id")
+  code        String              @unique(map: "uq_permission_groups_code") @map("code") @db.VarChar(64)
+  name        String              @map("name") @db.VarChar(255)
+  kind        PermissionGroupKind @default(DOMAIN) @map("kind")
+  description String?             @map("description") @db.VarChar(2000)
+  sortOrder   Int                 @default(0) @map("sort_order")
+  isActive    Boolean             @default(true) @map("is_active")
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  permissions Permission[]
+
+  @@index([isActive], map: "idx_permission_groups_is_active")
+  @@map("permission_groups")
+}
+
+model Company {
+  id                   String        @id @default(uuid()) @map("id")
+  name                 String        @map("name") @db.VarChar(255)
+  legalName            String?       @map("legal_name") @db.VarChar(255)
+  tradingName          String?       @map("trading_name") @db.VarChar(255)
+  registrationNumber   String?       @map("registration_number") @db.VarChar(128)
+  taxVatId             String?       @map("tax_vat_id") @db.VarChar(128)
+  jurisdiction         String?       @map("jurisdiction") @db.VarChar(2)
+  status               CompanyStatus @default(ACTIVE) @map("status")
+  isCanonical          Boolean       @default(false) @map("is_canonical")
+  anonymizedAt         DateTime?     @map("anonymized_at") @db.Timestamptz
+  anonymizationTokenId String?       @map("anonymization_token_id") @db.VarChar(128)
+  importSourceRef      String?       @map("import_source_ref") @db.VarChar(255)
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("CompanyCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("CompanyUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("CompanyDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  branches              Branch[]
+  employments           Employment[]
+  companyAddresses      CompanyAddress[]
+  companyContactMethods CompanyContactMethod[]
+  companyWebsites       CompanyWebsite[]
+  companySocialProfiles CompanySocialProfile[]
+  companyCategories     CompanyCategory[]
+  companyTags           CompanyTag[]
+
+  @@index([name], map: "idx_companies_name")
+  @@index([jurisdiction, registrationNumber], map: "idx_companies_jurisdiction_registration_number")
+  @@index([status], map: "idx_companies_status")
+  @@index([createdAt], map: "idx_companies_created_at")
+  @@index([createdById], map: "idx_companies_created_by_id")
+  @@index([updatedById], map: "idx_companies_updated_by_id")
+  @@index([deletedById], map: "idx_companies_deleted_by_id")
+  @@map("companies")
+}
+
+model Branch {
+  id              String       @id @default(uuid()) @map("id")
+  companyId       String       @map("company_id")
+  company         Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  name            String       @map("name") @db.VarChar(255)
+  branchCode      String?      @map("branch_code") @db.VarChar(128)
+  isHq            Boolean      @default(false) @map("is_hq")
+  status          BranchStatus @default(ACTIVE) @map("status")
+  importSourceRef String?      @map("import_source_ref") @db.VarChar(255)
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("BranchCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("BranchUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("BranchDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  employments          Employment[]
+  branchAddresses      BranchAddress[]
+  branchContactMethods BranchContactMethod[]
+  branchWebsites       BranchWebsite[]
+  branchSocialProfiles BranchSocialProfile[]
+
+  @@index([companyId], map: "idx_branches_company_id")
+  @@index([companyId, name], map: "idx_branches_company_id_name")
+  @@index([isHq], map: "idx_branches_is_hq")
+  @@index([status], map: "idx_branches_status")
+  @@index([createdById], map: "idx_branches_created_by_id")
+  @@index([updatedById], map: "idx_branches_updated_by_id")
+  @@index([deletedById], map: "idx_branches_deleted_by_id")
+  @@map("branches")
+}
+
+model Person {
+  id                   String    @id @default(uuid()) @map("id")
+  firstName            String?   @map("first_name") @db.VarChar(255)
+  lastName             String?   @map("last_name") @db.VarChar(255)
+  middleName           String?   @map("middle_name") @db.VarChar(255)
+  displayName          String?   @map("display_name") @db.VarChar(255)
+  preferredLanguage    String?   @map("preferred_language") @db.VarChar(16)
+  photoUrl             String?   @map("photo_url") @db.VarChar(2048)
+  anonymizedAt         DateTime? @map("anonymized_at") @db.Timestamptz
+  anonymizationTokenId String?   @map("anonymization_token_id") @db.VarChar(128)
+  importSourceRef      String?   @map("import_source_ref") @db.VarChar(255)
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("PersonCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("PersonUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("PersonDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  employments          Employment[]
+  personContactMethods PersonContactMethod[]
+  personSocialProfiles PersonSocialProfile[]
+  personTags           PersonTag[]
+
+  @@index([lastName, firstName], map: "idx_people_last_name_first_name")
+  @@index([firstName, lastName], map: "idx_people_first_name_last_name")
+  @@index([createdAt], map: "idx_people_created_at")
+  @@index([anonymizedAt], map: "idx_people_anonymized_at")
+  @@index([createdById], map: "idx_people_created_by_id")
+  @@index([updatedById], map: "idx_people_updated_by_id")
+  @@index([deletedById], map: "idx_people_deleted_by_id")
+  @@map("people")
+}
+
+model Address {
+  id              String  @id @default(uuid()) @map("id")
+  streetLine1     String? @map("street_line_1") @db.VarChar(255)
+  streetLine2     String? @map("street_line_2") @db.VarChar(255)
+  postalCode      String? @map("postal_code") @db.VarChar(32)
+  city            String? @map("city") @db.VarChar(128)
+  region          String? @map("region") @db.VarChar(128)
+  countryCode     String  @map("country_code") @db.VarChar(2)
+  latitude        Float?  @map("latitude")
+  longitude       Float?  @map("longitude")
+  formatted       String? @map("formatted") @db.VarChar(1024)
+  importSourceRef String? @map("import_source_ref") @db.VarChar(255)
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("AddressCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("AddressUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("AddressDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  companyAddresses CompanyAddress[]
+  branchAddresses  BranchAddress[]
+
+  @@index([countryCode, postalCode], map: "idx_addresses_country_code_postal_code")
+  @@index([countryCode, city], map: "idx_addresses_country_code_city")
+  @@index([latitude, longitude], map: "idx_addresses_latitude_longitude")
+  @@index([createdById], map: "idx_addresses_created_by_id")
+  @@index([updatedById], map: "idx_addresses_updated_by_id")
+  @@index([deletedById], map: "idx_addresses_deleted_by_id")
+  @@map("addresses")
+}
+
+model Website {
+  id              String  @id @default(uuid()) @map("id")
+  domain          String  @map("domain") @db.VarChar(255)
+  url             String? @map("url") @db.VarChar(2048)
+  title           String? @map("title") @db.VarChar(500)
+  description     String? @map("description") @db.VarChar(2000)
+  techHints       Json?   @map("tech_hints")
+  importSourceRef String? @map("import_source_ref") @db.VarChar(255)
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("WebsiteCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("WebsiteUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("WebsiteDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  companyWebsites CompanyWebsite[]
+  branchWebsites  BranchWebsite[]
+
+  @@index([domain], map: "idx_websites_domain")
+  @@index([createdById], map: "idx_websites_created_by_id")
+  @@index([updatedById], map: "idx_websites_updated_by_id")
+  @@index([deletedById], map: "idx_websites_deleted_by_id")
+  @@map("websites")
+}
+
+model SocialProfile {
+  id                String         @id @default(uuid()) @map("id")
+  platformId        String         @map("platform_id")
+  platform          SocialPlatform @relation(fields: [platformId], references: [id], onDelete: Restrict)
+  handle            String?        @map("handle") @db.VarChar(255)
+  profileUrl        String?        @map("profile_url") @db.VarChar(2048)
+  platformProfileId String?        @map("platform_profile_id") @db.VarChar(255)
+  displayName       String?        @map("display_name") @db.VarChar(255)
+  activitySnapshot  Json?          @map("activity_snapshot")
+  importSourceRef   String?        @map("import_source_ref") @db.VarChar(255)
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("SocialProfileCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("SocialProfileUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("SocialProfileDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  personSocialProfiles  PersonSocialProfile[]
+  companySocialProfiles CompanySocialProfile[]
+  branchSocialProfiles  BranchSocialProfile[]
+
+  @@index([platformId, platformProfileId], map: "idx_social_profiles_platform_profile_id")
+  @@index([platformId, handle], map: "idx_social_profiles_platform_handle")
+  @@index([createdById], map: "idx_social_profiles_created_by_id")
+  @@index([updatedById], map: "idx_social_profiles_updated_by_id")
+  @@index([deletedById], map: "idx_social_profiles_deleted_by_id")
+  @@map("social_profiles")
+}
+
+model ContactMethod {
+  id              String            @id @default(uuid()) @map("id")
+  typeId          String            @map("type_id")
+  type            ContactMethodType @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  value           String            @map("value") @db.VarChar(500)
+  countryCode     String?           @map("country_code") @db.VarChar(5)
+  importSourceRef String?           @map("import_source_ref") @db.VarChar(255)
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("ContactMethodCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("ContactMethodUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("ContactMethodDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  personLinks  PersonContactMethod[]
+  companyLinks CompanyContactMethod[]
+  branchLinks  BranchContactMethod[]
+
+  @@index([typeId, value], map: "idx_contact_methods_type_value")
+  @@index([createdById], map: "idx_contact_methods_created_by_id")
+  @@index([updatedById], map: "idx_contact_methods_updated_by_id")
+  @@index([deletedById], map: "idx_contact_methods_deleted_by_id")
+  @@map("contact_methods")
+}
+
+model Tag {
+  id          String  @id @default(uuid()) @map("id")
+  name        String  @map("name") @db.VarChar(255)
+  displayName String? @map("display_name") @db.VarChar(255)
+  color       String? @map("color") @db.VarChar(32)
+  isSystem    Boolean @default(false) @map("is_system")
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("TagCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("TagUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("TagDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  companyTags CompanyTag[]
+  personTags  PersonTag[]
+
+  @@index([name], map: "idx_tags_name")
+  @@index([createdById], map: "idx_tags_created_by_id")
+  @@index([updatedById], map: "idx_tags_updated_by_id")
+  @@index([deletedById], map: "idx_tags_deleted_by_id")
+  @@map("tags")
+}
+
+model Category {
+  id          String     @id @default(uuid()) @map("id")
+  name        String     @map("name") @db.VarChar(255)
+  code        String     @unique(map: "uq_categories_code") @map("code") @db.VarChar(128)
+  description String?    @map("description") @db.VarChar(2000)
+  parentId    String?    @map("parent_id")
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children    Category[] @relation("CategoryHierarchy")
+  sortOrder   Int        @default(0) @map("sort_order")
+  isActive    Boolean    @default(true) @map("is_active")
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("CategoryCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("CategoryUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("CategoryDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  companyCategories CompanyCategory[]
+
+  @@index([parentId], map: "idx_categories_parent_id")
+  @@index([isActive], map: "idx_categories_is_active")
+  @@index([createdById], map: "idx_categories_created_by_id")
+  @@index([updatedById], map: "idx_categories_updated_by_id")
+  @@index([deletedById], map: "idx_categories_deleted_by_id")
+  @@map("categories")
+}
+
+model Employment {
+  id              String     @id @default(uuid()) @map("id")
+  personId        String     @map("person_id")
+  person          Person     @relation(fields: [personId], references: [id], onDelete: Restrict)
+  companyId       String     @map("company_id")
+  company         Company    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branchId        String?    @map("branch_id")
+  branch          Branch?    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  title           String     @map("title") @db.VarChar(255)
+  department      String?    @map("department") @db.VarChar(255)
+  roleLevelId     String?    @map("role_level_id")
+  roleLevel       RoleLevel? @relation(fields: [roleLevelId], references: [id], onDelete: Restrict)
+  startedAt       DateTime   @map("started_at") @db.Date
+  leftAt          DateTime?  @map("left_at") @db.Date
+  importSourceRef String?    @map("import_source_ref") @db.VarChar(255)
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("EmploymentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("EmploymentUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("EmploymentDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@index([personId, leftAt], map: "idx_employments_person_id_left_at")
+  @@index([companyId], map: "idx_employments_company_id")
+  @@index([companyId, leftAt], map: "idx_employments_company_id_left_at")
+  @@index([branchId], map: "idx_employments_branch_id")
+  @@index([personId, companyId], map: "idx_employments_person_id_company_id")
+  @@index([roleLevelId], map: "idx_employments_role_level_id")
+  @@index([createdById], map: "idx_employments_created_by_id")
+  @@index([updatedById], map: "idx_employments_updated_by_id")
+  @@index([deletedById], map: "idx_employments_deleted_by_id")
+  @@map("employments")
+}
+
+model CompanyAddress {
+  id           String    @id @default(uuid()) @map("id")
+  companyId    String    @map("company_id")
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  addressId    String    @map("address_id")
+  address      Address   @relation(fields: [addressId], references: [id], onDelete: Restrict)
+  role         String    @map("role") @db.VarChar(64)
+  isPrimary    Boolean   @default(false) @map("is_primary")
+  assignedById String?   @map("assigned_by_id")
+  assignedBy   User?     @relation("CompanyAddressAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt   DateTime? @map("assigned_at") @db.Timestamptz
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("CompanyAddressCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("CompanyAddressUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("CompanyAddressDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@unique([companyId, addressId, role], map: "uq_company_addresses_company_id_address_id_role")
+  @@index([companyId], map: "idx_company_addresses_company_id")
+  @@index([addressId], map: "idx_company_addresses_address_id")
+  @@index([companyId, role, isPrimary], map: "idx_company_addresses_company_role_primary")
+  @@index([createdById], map: "idx_company_addresses_created_by_id")
+  @@index([updatedById], map: "idx_company_addresses_updated_by_id")
+  @@index([deletedById], map: "idx_company_addresses_deleted_by_id")
+  @@map("company_addresses")
+}
+
+model BranchAddress {
+  id           String    @id @default(uuid()) @map("id")
+  branchId     String    @map("branch_id")
+  branch       Branch    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  addressId    String    @map("address_id")
+  address      Address   @relation(fields: [addressId], references: [id], onDelete: Restrict)
+  role         String    @map("role") @db.VarChar(64)
+  isPrimary    Boolean   @default(false) @map("is_primary")
+  assignedById String?   @map("assigned_by_id")
+  assignedBy   User?     @relation("BranchAddressAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt   DateTime? @map("assigned_at") @db.Timestamptz
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("BranchAddressCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("BranchAddressUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("BranchAddressDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@unique([branchId, addressId, role], map: "uq_branch_addresses_branch_id_address_id_role")
+  @@index([branchId], map: "idx_branch_addresses_branch_id")
+  @@index([addressId], map: "idx_branch_addresses_address_id")
+  @@index([branchId, role, isPrimary], map: "idx_branch_addresses_branch_role_primary")
+  @@index([createdById], map: "idx_branch_addresses_created_by_id")
+  @@index([updatedById], map: "idx_branch_addresses_updated_by_id")
+  @@index([deletedById], map: "idx_branch_addresses_deleted_by_id")
+  @@map("branch_addresses")
+}
+
+model PersonContactMethod {
+  id                String        @id @default(uuid()) @map("id")
+  personId          String        @map("person_id")
+  person            Person        @relation(fields: [personId], references: [id], onDelete: Restrict)
+  contactMethodId   String        @map("contact_method_id")
+  contactMethod     ContactMethod @relation(fields: [contactMethodId], references: [id], onDelete: Restrict)
+  isPrimary         Boolean       @default(false) @map("is_primary")
+  suppressedAt      DateTime?     @map("suppressed_at") @db.Timestamptz
+  suppressionReason String?       @map("suppression_reason") @db.VarChar(500)
+  assignedById      String?       @map("assigned_by_id")
+  assignedBy        User?         @relation("PersonContactMethodAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt        DateTime?     @map("assigned_at") @db.Timestamptz
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("PersonContactMethodCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("PersonContactMethodUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("PersonContactMethodDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@unique([personId, contactMethodId], map: "uq_person_contact_methods_person_id_contact_method_id")
+  @@index([personId], map: "idx_person_contact_methods_person_id")
+  @@index([contactMethodId], map: "idx_person_contact_methods_contact_method_id")
+  @@index([personId, isPrimary], map: "idx_person_contact_methods_person_primary")
+  @@index([suppressedAt], map: "idx_person_contact_methods_suppressed_at")
+  @@index([createdById], map: "idx_person_contact_methods_created_by_id")
+  @@index([updatedById], map: "idx_person_contact_methods_updated_by_id")
+  @@index([deletedById], map: "idx_person_contact_methods_deleted_by_id")
+  @@map("person_contact_methods")
+}
+
+model CompanyContactMethod {
+  id                String        @id @default(uuid()) @map("id")
+  companyId         String        @map("company_id")
+  company           Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  contactMethodId   String        @map("contact_method_id")
+  contactMethod     ContactMethod @relation(fields: [contactMethodId], references: [id], onDelete: Restrict)
+  isPrimary         Boolean       @default(false) @map("is_primary")
+  suppressedAt      DateTime?     @map("suppressed_at") @db.Timestamptz
+  suppressionReason String?       @map("suppression_reason") @db.VarChar(500)
+  assignedById      String?       @map("assigned_by_id")
+  assignedBy        User?         @relation("CompanyContactMethodAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt        DateTime?     @map("assigned_at") @db.Timestamptz
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("CompanyContactMethodCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("CompanyContactMethodUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("CompanyContactMethodDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@unique([companyId, contactMethodId], map: "uq_company_contact_methods_company_id_contact_method_id")
+  @@index([companyId], map: "idx_company_contact_methods_company_id")
+  @@index([contactMethodId], map: "idx_company_contact_methods_contact_method_id")
+  @@index([companyId, isPrimary], map: "idx_company_contact_methods_company_primary")
+  @@index([suppressedAt], map: "idx_company_contact_methods_suppressed_at")
+  @@index([createdById], map: "idx_company_contact_methods_created_by_id")
+  @@index([updatedById], map: "idx_company_contact_methods_updated_by_id")
+  @@index([deletedById], map: "idx_company_contact_methods_deleted_by_id")
+  @@map("company_contact_methods")
+}
+
+model BranchContactMethod {
+  id                String        @id @default(uuid()) @map("id")
+  branchId          String        @map("branch_id")
+  branch            Branch        @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  contactMethodId   String        @map("contact_method_id")
+  contactMethod     ContactMethod @relation(fields: [contactMethodId], references: [id], onDelete: Restrict)
+  isPrimary         Boolean       @default(false) @map("is_primary")
+  suppressedAt      DateTime?     @map("suppressed_at") @db.Timestamptz
+  suppressionReason String?       @map("suppression_reason") @db.VarChar(500)
+  assignedById      String?       @map("assigned_by_id")
+  assignedBy        User?         @relation("BranchContactMethodAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt        DateTime?     @map("assigned_at") @db.Timestamptz
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("BranchContactMethodCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("BranchContactMethodUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("BranchContactMethodDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@unique([branchId, contactMethodId], map: "uq_branch_contact_methods_branch_id_contact_method_id")
+  @@index([branchId], map: "idx_branch_contact_methods_branch_id")
+  @@index([contactMethodId], map: "idx_branch_contact_methods_contact_method_id")
+  @@index([branchId, isPrimary], map: "idx_branch_contact_methods_branch_primary")
+  @@index([suppressedAt], map: "idx_branch_contact_methods_suppressed_at")
+  @@index([createdById], map: "idx_branch_contact_methods_created_by_id")
+  @@index([updatedById], map: "idx_branch_contact_methods_updated_by_id")
+  @@index([deletedById], map: "idx_branch_contact_methods_deleted_by_id")
+  @@map("branch_contact_methods")
+}
+
+model CompanyWebsite {
+  id           String    @id @default(uuid()) @map("id")
+  companyId    String    @map("company_id")
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  websiteId    String    @map("website_id")
+  website      Website   @relation(fields: [websiteId], references: [id], onDelete: Restrict)
+  isPrimary    Boolean   @default(false) @map("is_primary")
+  assignedById String?   @map("assigned_by_id")
+  assignedBy   User?     @relation("CompanyWebsiteAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt   DateTime? @map("assigned_at") @db.Timestamptz
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("CompanyWebsiteCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("CompanyWebsiteUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("CompanyWebsiteDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@unique([companyId, websiteId], map: "uq_company_websites_company_id_website_id")
+  @@index([companyId], map: "idx_company_websites_company_id")
+  @@index([websiteId], map: "idx_company_websites_website_id")
+  @@index([companyId, isPrimary], map: "idx_company_websites_company_primary")
+  @@index([createdById], map: "idx_company_websites_created_by_id")
+  @@index([updatedById], map: "idx_company_websites_updated_by_id")
+  @@index([deletedById], map: "idx_company_websites_deleted_by_id")
+  @@map("company_websites")
+}
+
+model BranchWebsite {
+  id           String    @id @default(uuid()) @map("id")
+  branchId     String    @map("branch_id")
+  branch       Branch    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  websiteId    String    @map("website_id")
+  website      Website   @relation(fields: [websiteId], references: [id], onDelete: Restrict)
+  isPrimary    Boolean   @default(false) @map("is_primary")
+  assignedById String?   @map("assigned_by_id")
+  assignedBy   User?     @relation("BranchWebsiteAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt   DateTime? @map("assigned_at") @db.Timestamptz
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("BranchWebsiteCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("BranchWebsiteUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("BranchWebsiteDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@unique([branchId, websiteId], map: "uq_branch_websites_branch_id_website_id")
+  @@index([branchId], map: "idx_branch_websites_branch_id")
+  @@index([websiteId], map: "idx_branch_websites_website_id")
+  @@index([branchId, isPrimary], map: "idx_branch_websites_branch_primary")
+  @@index([createdById], map: "idx_branch_websites_created_by_id")
+  @@index([updatedById], map: "idx_branch_websites_updated_by_id")
+  @@index([deletedById], map: "idx_branch_websites_deleted_by_id")
+  @@map("branch_websites")
+}
+
+model PersonSocialProfile {
+  id              String        @id @default(uuid()) @map("id")
+  personId        String        @map("person_id")
+  person          Person        @relation(fields: [personId], references: [id], onDelete: Restrict)
+  socialProfileId String        @map("social_profile_id")
+  socialProfile   SocialProfile @relation(fields: [socialProfileId], references: [id], onDelete: Restrict)
+  isPrimary       Boolean       @default(false) @map("is_primary")
+  assignedById    String?       @map("assigned_by_id")
+  assignedBy      User?         @relation("PersonSocialProfileAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt      DateTime?     @map("assigned_at") @db.Timestamptz
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("PersonSocialProfileCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("PersonSocialProfileUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("PersonSocialProfileDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@unique([personId, socialProfileId], map: "uq_person_social_profiles_person_id_social_profile_id")
+  @@index([personId], map: "idx_person_social_profiles_person_id")
+  @@index([socialProfileId], map: "idx_person_social_profiles_social_profile_id")
+  @@index([personId, isPrimary], map: "idx_person_social_profiles_person_primary")
+  @@index([createdById], map: "idx_person_social_profiles_created_by_id")
+  @@index([updatedById], map: "idx_person_social_profiles_updated_by_id")
+  @@index([deletedById], map: "idx_person_social_profiles_deleted_by_id")
+  @@map("person_social_profiles")
+}
+
+model CompanySocialProfile {
+  id              String        @id @default(uuid()) @map("id")
+  companyId       String        @map("company_id")
+  company         Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  socialProfileId String        @map("social_profile_id")
+  socialProfile   SocialProfile @relation(fields: [socialProfileId], references: [id], onDelete: Restrict)
+  isPrimary       Boolean       @default(false) @map("is_primary")
+  assignedById    String?       @map("assigned_by_id")
+  assignedBy      User?         @relation("CompanySocialProfileAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt      DateTime?     @map("assigned_at") @db.Timestamptz
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("CompanySocialProfileCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("CompanySocialProfileUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("CompanySocialProfileDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@unique([companyId, socialProfileId], map: "uq_company_social_profiles_company_id_social_profile_id")
+  @@index([companyId], map: "idx_company_social_profiles_company_id")
+  @@index([socialProfileId], map: "idx_company_social_profiles_social_profile_id")
+  @@index([companyId, isPrimary], map: "idx_company_social_profiles_company_primary")
+  @@index([createdById], map: "idx_company_social_profiles_created_by_id")
+  @@index([updatedById], map: "idx_company_social_profiles_updated_by_id")
+  @@index([deletedById], map: "idx_company_social_profiles_deleted_by_id")
+  @@map("company_social_profiles")
+}
+
+model BranchSocialProfile {
+  id              String        @id @default(uuid()) @map("id")
+  branchId        String        @map("branch_id")
+  branch          Branch        @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  socialProfileId String        @map("social_profile_id")
+  socialProfile   SocialProfile @relation(fields: [socialProfileId], references: [id], onDelete: Restrict)
+  isPrimary       Boolean       @default(false) @map("is_primary")
+  assignedById    String?       @map("assigned_by_id")
+  assignedBy      User?         @relation("BranchSocialProfileAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt      DateTime?     @map("assigned_at") @db.Timestamptz
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("BranchSocialProfileCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("BranchSocialProfileUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("BranchSocialProfileDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@unique([branchId, socialProfileId], map: "uq_branch_social_profiles_branch_id_social_profile_id")
+  @@index([branchId], map: "idx_branch_social_profiles_branch_id")
+  @@index([socialProfileId], map: "idx_branch_social_profiles_social_profile_id")
+  @@index([branchId, isPrimary], map: "idx_branch_social_profiles_branch_primary")
+  @@index([createdById], map: "idx_branch_social_profiles_created_by_id")
+  @@index([updatedById], map: "idx_branch_social_profiles_updated_by_id")
+  @@index([deletedById], map: "idx_branch_social_profiles_deleted_by_id")
+  @@map("branch_social_profiles")
+}
+
+model CompanyTag {
+  id           String    @id @default(uuid()) @map("id")
+  companyId    String    @map("company_id")
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  tagId        String    @map("tag_id")
+  tag          Tag       @relation(fields: [tagId], references: [id], onDelete: Restrict)
+  assignedById String?   @map("assigned_by_id")
+  assignedBy   User?     @relation("CompanyTagAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt   DateTime? @map("assigned_at") @db.Timestamptz
+  source       String?   @map("source") @db.VarChar(255)
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("CompanyTagCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("CompanyTagUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("CompanyTagDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@unique([companyId, tagId], map: "uq_company_tags_company_id_tag_id")
+  @@index([companyId], map: "idx_company_tags_company_id")
+  @@index([tagId], map: "idx_company_tags_tag_id")
+  @@index([assignedAt], map: "idx_company_tags_assigned_at")
+  @@index([createdById], map: "idx_company_tags_created_by_id")
+  @@index([updatedById], map: "idx_company_tags_updated_by_id")
+  @@index([deletedById], map: "idx_company_tags_deleted_by_id")
+  @@map("company_tags")
+}
+
+model PersonTag {
+  id           String    @id @default(uuid()) @map("id")
+  personId     String    @map("person_id")
+  person       Person    @relation(fields: [personId], references: [id], onDelete: Restrict)
+  tagId        String    @map("tag_id")
+  tag          Tag       @relation(fields: [tagId], references: [id], onDelete: Restrict)
+  assignedById String?   @map("assigned_by_id")
+  assignedBy   User?     @relation("PersonTagAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt   DateTime? @map("assigned_at") @db.Timestamptz
+  source       String?   @map("source") @db.VarChar(255)
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("PersonTagCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("PersonTagUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("PersonTagDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@unique([personId, tagId], map: "uq_person_tags_person_id_tag_id")
+  @@index([personId], map: "idx_person_tags_person_id")
+  @@index([tagId], map: "idx_person_tags_tag_id")
+  @@index([assignedAt], map: "idx_person_tags_assigned_at")
+  @@index([createdById], map: "idx_person_tags_created_by_id")
+  @@index([updatedById], map: "idx_person_tags_updated_by_id")
+  @@index([deletedById], map: "idx_person_tags_deleted_by_id")
+  @@map("person_tags")
+}
+
+model CompanyCategory {
+  id           String    @id @default(uuid()) @map("id")
+  companyId    String    @map("company_id")
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  categoryId   String    @map("category_id")
+  category     Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  assignedById String?   @map("assigned_by_id")
+  assignedBy   User?     @relation("CompanyCategoryAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt   DateTime? @map("assigned_at") @db.Timestamptz
+  source       String?   @map("source") @db.VarChar(255)
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("CompanyCategoryCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("CompanyCategoryUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("CompanyCategoryDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@unique([companyId, categoryId], map: "uq_company_categories_company_id_category_id")
+  @@index([companyId], map: "idx_company_categories_company_id")
+  @@index([categoryId], map: "idx_company_categories_category_id")
+  @@index([createdById], map: "idx_company_categories_created_by_id")
+  @@index([updatedById], map: "idx_company_categories_updated_by_id")
+  @@index([deletedById], map: "idx_company_categories_deleted_by_id")
+  @@map("company_categories")
+}

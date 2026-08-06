@@ -23,3 +23,5 @@ coverage/
 dist/
 build/
 .turbo/
+.vercel/
+.env.local

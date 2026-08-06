@@ -23,7 +23,7 @@ export class HealthService {
 
   private async checkDatabase(): Promise<ServiceStatus> {
     try {
-      await this.prisma.$queryRaw`SELECT 1`;
+      await this.prisma.client.$queryRaw`SELECT 1`;
       return 'up';
     } catch (error) {
       this.logger.warn('Database health check failed', error instanceof Error ? error.stack : String(error));

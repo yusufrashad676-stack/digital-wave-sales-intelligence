@@ -4,6 +4,7 @@ import { Logger, ValidationPipe, type ValidationError } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface.js';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { RequestContextService } from './common/context/request-context.service.js';
@@ -47,6 +48,15 @@ async function bootstrap(): Promise<void> {
   );
   app.useGlobalFilters(new AllExceptionsFilter(app.get(RequestContextService)));
   app.useGlobalInterceptors(new TransformInterceptor(), new AccessLogInterceptor(app.get(RequestContextService)));
+
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Digital Wave Sales Intelligence API')
+    .setDescription('Phase 1 backend — stateless JWT authentication, RBAC, and health.')
+    .setVersion('0.1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('docs', app, document);
 
   const port = config.getOrThrow<number>('app.port');
   await app.listen(port);

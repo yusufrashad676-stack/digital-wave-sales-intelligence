@@ -1,5 +1,7 @@
 export type NodeEnv = 'development' | 'test' | 'production';
 
+export type JwtAlgorithm = 'HS256' | 'HS384' | 'HS512';
+
 export type AppConfig = {
   app: {
     nodeEnv: NodeEnv;
@@ -14,5 +16,18 @@ export type AppConfig = {
   throttle: {
     ttlSeconds: number;
     limit: number;
+  };
+  auth: {
+    jwt: {
+      accessSecret: string;
+      refreshSecret: string;
+      accessTtlSeconds: number;
+      refreshTtlSeconds: number;
+      algorithm: JwtAlgorithm;
+    };
+    throttle: {
+      ttlSeconds: number;
+      limit: number;
+    };
   };
 };

@@ -1,8 +1,12 @@
-import type { AppConfig, NodeEnv } from './configuration.js';
+import type { AppConfig, JwtAlgorithm, NodeEnv } from './configuration.js';
 
 const NODE_ENVS: NodeEnv[] = ['development', 'test', 'production'];
 
+const JWT_ALGORITHMS: JwtAlgorithm[] = ['HS256', 'HS384', 'HS512'];
+
 const DEV_DEFAULT_ORIGINS = ['http://localhost:5173', 'http://localhost:3000'];
+
+const MIN_JWT_SECRET_LENGTH = 32;
 
 function toOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
@@ -59,6 +63,42 @@ export function validateEnv(config: Record<string, unknown>): AppConfig {
     problems.push('THROTTLE_LIMIT must be an integer >= 1');
   }
 
+  const accessSecret = toOptionalString(config.JWT_SECRET);
+  if (!accessSecret || accessSecret.length < MIN_JWT_SECRET_LENGTH) {
+    problems.push(`JWT_SECRET is required and must be at least ${MIN_JWT_SECRET_LENGTH} characters`);
+  }
+
+  const refreshSecret = toOptionalString(config.JWT_REFRESH_SECRET);
+  if (!refreshSecret || refreshSecret.length < MIN_JWT_SECRET_LENGTH) {
+    problems.push(`JWT_REFRESH_SECRET is required and must be at least ${MIN_JWT_SECRET_LENGTH} characters`);
+  }
+
+  const accessTtlSeconds = toInteger(config.JWT_ACCESS_TTL, 900);
+  if (!Number.isInteger(accessTtlSeconds) || accessTtlSeconds < 1 || accessTtlSeconds > 86400) {
+    problems.push('JWT_ACCESS_TTL must be an integer between 1 and 86400');
+  }
+
+  const refreshTtlSeconds = toInteger(config.JWT_REFRESH_TTL, 2592000);
+  if (!Number.isInteger(refreshTtlSeconds) || refreshTtlSeconds < 60 || refreshTtlSeconds > 31536000) {
+    problems.push('JWT_REFRESH_TTL must be an integer between 60 and 31536000');
+  }
+
+  const rawAlgorithm = toOptionalString(config.JWT_ALGORITHM);
+  const algorithm: JwtAlgorithm = rawAlgorithm === undefined ? 'HS256' : (rawAlgorithm as JwtAlgorithm);
+  if (!JWT_ALGORITHMS.includes(algorithm)) {
+    problems.push(`JWT_ALGORITHM must be one of: ${JWT_ALGORITHMS.join(', ')}`);
+  }
+
+  const authTtlSeconds = toInteger(config.AUTH_THROTTLE_TTL_SECONDS, 60);
+  if (!Number.isInteger(authTtlSeconds) || authTtlSeconds < 1) {
+    problems.push('AUTH_THROTTLE_TTL_SECONDS must be an integer >= 1');
+  }
+
+  const authLimit = toInteger(config.AUTH_THROTTLE_LIMIT, 10);
+  if (!Number.isInteger(authLimit) || authLimit < 1) {
+    problems.push('AUTH_THROTTLE_LIMIT must be an integer >= 1');
+  }
+
   if (problems.length > 0) {
     throw new Error(`Invalid environment configuration:\n- ${problems.join('\n- ')}`);
   }
@@ -68,5 +108,15 @@ export function validateEnv(config: Record<string, unknown>): AppConfig {
     database: { directUrl: directUrl as string },
     cors: { origins },
     throttle: { ttlSeconds, limit },
+    auth: {
+      jwt: {
+        accessSecret: accessSecret as string,
+        refreshSecret: refreshSecret as string,
+        accessTtlSeconds,
+        refreshTtlSeconds,
+        algorithm,
+      },
+      throttle: { ttlSeconds: authTtlSeconds, limit: authLimit },
+    },
   };
 }

@@ -73,12 +73,13 @@ enum BranchStatus {
 }
 
 model User {
-  id          String     @id @default(uuid()) @map("id")
-  email       String     @unique(map: "uq_users_email") @map("email") @db.VarChar(320)
-  displayName String     @map("display_name") @db.VarChar(255)
-  status      UserStatus @default(REGISTERED) @map("status")
-  preferences Json?      @map("preferences")
-  lastLoginAt DateTime?  @map("last_login_at") @db.Timestamptz
+  id           String     @id @default(uuid()) @map("id")
+  email        String     @unique(map: "uq_users_email") @map("email") @db.VarChar(320)
+  displayName  String     @map("display_name") @db.VarChar(255)
+  passwordHash String     @map("password_hash") @db.VarChar(255)
+  status       UserStatus @default(REGISTERED) @map("status")
+  preferences  Json?      @map("preferences")
+  lastLoginAt  DateTime?  @map("last_login_at") @db.Timestamptz
 
   createdById String?   @map("created_by_id")
   createdBy   User?     @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
@@ -92,6 +93,7 @@ model User {
 
   roleAssignments RoleAssignment[]
   userWorkspaces  UserWorkspace[]
+  refreshTokens   RefreshToken[]
 
   createdUsers                  User[]                 @relation("UserCreatedBy")
   updatedUsers                  User[]                 @relation("UserUpdatedBy")
@@ -199,6 +201,9 @@ model User {
   updatedCompanyCategories      CompanyCategory[]      @relation("CompanyCategoryUpdatedBy")
   deletedCompanyCategories      CompanyCategory[]      @relation("CompanyCategoryDeletedBy")
   assignedCompanyCategories     CompanyCategory[]      @relation("CompanyCategoryAssignedBy")
+
+  createdRefreshTokens RefreshToken[] @relation("RefreshTokenCreatedBy")
+  updatedRefreshTokens RefreshToken[] @relation("RefreshTokenUpdatedBy")
 
   @@index([status], map: "idx_users_status")
   @@index([lastLoginAt], map: "idx_users_last_login_at")
@@ -1205,4 +1210,35 @@ model CompanyCategory {
   @@index([updatedById], map: "idx_company_categories_updated_by_id")
   @@index([deletedById], map: "idx_company_categories_deleted_by_id")
   @@map("company_categories")
+}
+
+// Ephemeral security data (DATABASE_RULES.md § Soft Delete: hard delete allowed for
+// token storage). Refresh tokens are rotated on every refresh, one-time use, and
+// revoked (revoked_at) on logout / reuse detection — soft-delete is intentionally
+// omitted; rotation keeps history via familyId + replacedByTokenId.
+model RefreshToken {
+  id                String    @id @default(uuid()) @map("id")
+  userId            String    @map("user_id")
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash         String    @unique(map: "uq_refresh_tokens_token_hash") @map("token_hash") @db.VarChar(255)
+  familyId          String    @map("family_id") @db.VarChar(64)
+  replacedByTokenId String?   @map("replaced_by_token_id") @db.VarChar(64)
+  expiresAt         DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt         DateTime? @map("revoked_at") @db.Timestamptz
+  userAgent         String?   @map("user_agent") @db.VarChar(512)
+  ipAddress         String?   @map("ip_address") @db.VarChar(64)
+
+  createdById String?  @map("created_by_id")
+  createdBy   User?    @relation("RefreshTokenCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?  @map("updated_by_id")
+  updatedBy   User?    @relation("RefreshTokenUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([userId], map: "idx_refresh_tokens_user_id")
+  @@index([familyId], map: "idx_refresh_tokens_family_id")
+  @@index([expiresAt], map: "idx_refresh_tokens_expires_at")
+  @@index([createdById], map: "idx_refresh_tokens_created_by_id")
+  @@index([updatedById], map: "idx_refresh_tokens_updated_by_id")
+  @@map("refresh_tokens")
 }

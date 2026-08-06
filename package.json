@@ -4,15 +4,50 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "build:watch": "tsc -p tsconfig.build.json --watch",
+    "start": "node dist/backend/src/main.js",
+    "start:prod": "node dist/backend/src/main.js",
+    "start:watch": "node --watch dist/backend/src/main.js",
+    "test": "tsx --test \"backend/src/**/*.spec.ts\"",
+    "test:watch": "tsx --test --watch \"backend/src/**/*.spec.ts\"",
+    "lint": "eslint backend/src",
+    "lint:fix": "eslint backend/src --fix",
+    "format": "prettier --write \"backend/src/**/*.ts\"",
+    "format:check": "prettier --check \"backend/src/**/*.ts\"",
     "prisma:format": "prisma format",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate"
   },
   "dependencies": {
+    "@nestjs/common": "^11.1.28",
+    "@nestjs/config": "^4.0.4",
+    "@nestjs/core": "^11.1.28",
+    "@nestjs/platform-express": "^11.1.28",
+    "@nestjs/throttler": "^6.5.0",
+    "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.6.0",
-    "dotenv": "^16.4.5"
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "dotenv": "^16.4.5",
+    "helmet": "^8.3.0",
+    "pg": "^8.22.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "prisma": "^7.6.0"
+    "@eslint/js": "^10.0.1",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.2",
+    "@typescript-eslint/eslint-plugin": "^8.66.0",
+    "@typescript-eslint/parser": "^8.66.0",
+    "eslint": "^10.8.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.6",
+    "prettier": "^3.9.6",
+    "prisma": "^7.6.0",
+    "tsx": "^4.23.8",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.66.0"
   }
 }

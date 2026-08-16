@@ -81,6 +81,7 @@ interface GooglePlace {
 
 interface GoogleTextSearchResponse {
   places?: GooglePlace[];
+  nextPageToken?: string;
 }
 
 @Injectable()
@@ -134,6 +135,7 @@ export class GooglePlacesProvider implements SearchProviderPort {
       providerId: this.providerId,
       results: payload.places.map(toProviderResult),
       rawEvidence: payload,
+      nextPageToken: payload.nextPageToken || undefined,
     };
   }
 
@@ -199,6 +201,9 @@ function buildRequestBody(query: SearchQuery, maxResults: number): Record<string
     body.minRating = query.filters.minRating;
   }
   body.pageSize = maxResults;
+  if (query.pageToken !== undefined) {
+    body.pageToken = query.pageToken;
+  }
   return body;
 }
 

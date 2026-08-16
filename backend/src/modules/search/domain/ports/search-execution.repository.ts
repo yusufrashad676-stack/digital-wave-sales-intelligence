@@ -11,6 +11,9 @@ export interface SearchExecutionMetrics {
   rawImportCount: number;
   persistedResultCount: number;
   durationMs: number;
+  pagesRequested?: number;
+  uniqueResultCount?: number;
+  duplicateResultCount?: number;
 }
 
 export interface CreateSearchExecutionInput {

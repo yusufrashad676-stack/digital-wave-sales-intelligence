@@ -145,6 +145,44 @@ describe('GooglePlacesProvider', () => {
     assert.equal(body.pageSize, 20);
   });
 
+  it('sends pageToken when provided in the query', async () => {
+    const { provider, calls } = providerWith({ places: [] });
+    await provider.search(new SearchQuery('بحث', {}, ' nextPageToken-abc'));
+    const body = JSON.parse(String(calls[0]?.init?.body)) as Record<string, unknown>;
+    assert.equal(body.pageToken, ' nextPageToken-abc');
+  });
+
+  it('omits pageToken when not provided in the query', async () => {
+    const { provider, calls } = providerWith({ places: [] });
+    await provider.search(new SearchQuery('بحث'));
+    const body = JSON.parse(String(calls[0]?.init?.body)) as Record<string, unknown>;
+    assert.equal(body.pageToken, undefined);
+  });
+
+  it('returns nextPageToken from the Google response', async () => {
+    const { provider } = providerWith({
+      places: [SAMPLE_PLACE],
+      nextPageToken: 'CpQCBRgAEhQ',
+    });
+    const resultSet = await provider.search(new SearchQuery('بحث'));
+    assert.equal(resultSet.nextPageToken, 'CpQCBRgAEhQ');
+  });
+
+  it('returns undefined nextPageToken when Google omits it', async () => {
+    const { provider } = providerWith({ places: [SAMPLE_PLACE] });
+    const resultSet = await provider.search(new SearchQuery('بحث'));
+    assert.equal(resultSet.nextPageToken, undefined);
+  });
+
+  it('treats empty string nextPageToken as undefined', async () => {
+    const { provider } = providerWith({
+      places: [SAMPLE_PLACE],
+      nextPageToken: '',
+    });
+    const resultSet = await provider.search(new SearchQuery('بحث'));
+    assert.equal(resultSet.nextPageToken, undefined);
+  });
+
   it('maps a Google place into a ProviderSearchResult', async () => {
     const { provider } = providerWith({ places: [SAMPLE_PLACE] });
     const resultSet = await provider.search(new SearchQuery('أسنان'));

@@ -21,4 +21,7 @@ export interface ProviderResultSet {
   // (e.g. the raw Google Places JSON). Persisted as RawImport evidence; never
   // exposed through the public API contract.
   rawEvidence?: unknown;
+  // Token to pass as pageToken on the next request to retrieve subsequent results.
+  // Undefined when there are no more pages.
+  nextPageToken?: string;
 }

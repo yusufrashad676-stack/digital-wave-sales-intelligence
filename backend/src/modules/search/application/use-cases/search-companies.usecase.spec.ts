@@ -57,6 +57,22 @@ function defaultProvider(resultSet: ProviderResultSet): SearchProviderPort {
   } as unknown as SearchProviderPort;
 }
 
+function paginatedProvider(pages: ProviderResultSet[]): SearchProviderPort {
+  let callIndex = 0;
+  return {
+    providerId: 'mock',
+    capabilities: ['search'],
+    search: async () => {
+      const page = pages[callIndex];
+      if (page === undefined) {
+        throw new Error('No more pages in test stub');
+      }
+      callIndex++;
+      return page;
+    },
+  } as unknown as SearchProviderPort;
+}
+
 function harnessWith(
   resultSet: ProviderResultSet,
   options: { provider?: SearchProviderPort; importSourceFound?: boolean } = {},
@@ -200,6 +216,9 @@ describe('SearchCompaniesUseCase', () => {
     assert.equal(completed.metrics.rawImportCount, 1);
     assert.equal(completed.metrics.persistedResultCount, 1);
     assert.ok(Number.isInteger(completed.metrics.durationMs) && completed.metrics.durationMs >= 0);
+    assert.equal(completed.metrics.pagesRequested, 1);
+    assert.equal(completed.metrics.uniqueResultCount, 1);
+    assert.equal(completed.metrics.duplicateResultCount, 0);
 
     assert.deepEqual(jobs.completed, ['job-1']);
     assert.deepEqual(jobs.failed, []);
@@ -306,5 +325,212 @@ describe('SearchCompaniesUseCase', () => {
 
     assert.deepEqual(jobs.created, []);
     assert.deepEqual(executions.created, []);
+  });
+
+  it('paginates across two pages when nextPageToken is returned', async () => {
+    const page1: ProviderResultSet = {
+      providerId: 'mock',
+      results: [sampleResult()],
+      rawEvidence: { page: 1 },
+      nextPageToken: 'token-page-2',
+    };
+    const page2: ProviderResultSet = {
+      providerId: 'mock',
+      results: [{ ...sampleResult(), providerRecordId: 'mock-clinic-002', companyName: 'عيادة البدر' }],
+      rawEvidence: { page: 2 },
+    };
+    const provider = paginatedProvider([page1, page2]);
+    const { useCase, batches, executions } = harnessWith(page1, { provider });
+
+    const results = await useCase.search({ query: 'عيادات', filters: {} } as SearchQuery, PRINCIPAL);
+
+    assert.equal(results.length, 2);
+    assert.equal(batches.length, 2);
+    assert.equal(batches[0]?.results.length, 1);
+    assert.equal(batches[1]?.results.length, 1);
+    assert.equal(executions.completed[0]?.metrics.pagesRequested, 2);
+    assert.equal(executions.completed[0]?.metrics.providerResultCount, 2);
+    assert.equal(executions.completed[0]?.metrics.rawImportCount, 2);
+    assert.equal(executions.completed[0]?.metrics.uniqueResultCount, 2);
+    assert.equal(executions.completed[0]?.metrics.duplicateResultCount, 0);
+  });
+
+  it('paginates across three pages', async () => {
+    const page1: ProviderResultSet = {
+      providerId: 'mock',
+      results: [sampleResult()],
+      rawEvidence: { page: 1 },
+      nextPageToken: 'token-2',
+    };
+    const page2: ProviderResultSet = {
+      providerId: 'mock',
+      results: [{ ...sampleResult(), providerRecordId: 'mock-clinic-002' }],
+      rawEvidence: { page: 2 },
+      nextPageToken: 'token-3',
+    };
+    const page3: ProviderResultSet = {
+      providerId: 'mock',
+      results: [{ ...sampleResult(), providerRecordId: 'mock-clinic-003' }],
+      rawEvidence: { page: 3 },
+    };
+    const provider = paginatedProvider([page1, page2, page3]);
+    const { useCase, batches, executions } = harnessWith(page1, { provider });
+
+    const results = await useCase.search({ query: 'عيادات', filters: {} } as SearchQuery, PRINCIPAL);
+
+    assert.equal(results.length, 3);
+    assert.equal(batches.length, 3);
+    assert.equal(executions.completed[0]?.metrics.pagesRequested, 3);
+  });
+
+  it('stops at the safety page limit even when more pages exist', async () => {
+    const makePage = (id: string, token: string): ProviderResultSet => ({
+      providerId: 'mock',
+      results: [{ ...sampleResult(), providerRecordId: id }],
+      rawEvidence: {},
+      nextPageToken: token,
+    });
+    const provider = paginatedProvider([
+      makePage('p1', 't2'),
+      makePage('p2', 't3'),
+      makePage('p3', 't4'),
+      makePage('p4', 't5'),
+    ]);
+    const { useCase, executions } = harnessWith(makePage('p1', 't2'), { provider });
+
+    const results = await useCase.search({ query: 'عيادات', filters: {} } as SearchQuery, PRINCIPAL);
+
+    assert.equal(results.length, 3);
+    assert.equal(executions.completed[0]?.metrics.pagesRequested, 3);
+  });
+
+  it('stops when target quantity is reached', async () => {
+    const page1: ProviderResultSet = {
+      providerId: 'mock',
+      results: [
+        sampleResult(),
+        { ...sampleResult(), providerRecordId: 'mock-clinic-002' },
+        { ...sampleResult(), providerRecordId: 'mock-clinic-003' },
+      ],
+      rawEvidence: {},
+      nextPageToken: 'token-2',
+    };
+    const page2: ProviderResultSet = {
+      providerId: 'mock',
+      results: [
+        { ...sampleResult(), providerRecordId: 'mock-clinic-004' },
+        { ...sampleResult(), providerRecordId: 'mock-clinic-005' },
+      ],
+      rawEvidence: {},
+      nextPageToken: 'token-3',
+    };
+    const provider = paginatedProvider([page1, page2]);
+    const { useCase, executions } = harnessWith(page1, { provider });
+
+    const results = await useCase.search({ query: 'عيادات', filters: {}, targetQuantity: 3 } as SearchQuery, PRINCIPAL);
+
+    assert.equal(results.length, 3);
+    assert.equal(executions.completed[0]?.metrics.pagesRequested, 1);
+  });
+
+  it('stops when nextPageToken disappears', async () => {
+    const page1: ProviderResultSet = {
+      providerId: 'mock',
+      results: [sampleResult()],
+      rawEvidence: {},
+    };
+    const provider = paginatedProvider([page1]);
+    const { useCase, executions } = harnessWith(page1, { provider });
+
+    const results = await useCase.search({ query: 'عيادات', filters: {} } as SearchQuery, PRINCIPAL);
+
+    assert.equal(results.length, 1);
+    assert.equal(executions.completed[0]?.metrics.pagesRequested, 1);
+  });
+
+  it('deduplicates results with the same providerRecordId across pages', async () => {
+    const page1: ProviderResultSet = {
+      providerId: 'mock',
+      results: [sampleResult()],
+      rawEvidence: { page: 1 },
+      nextPageToken: 'token-2',
+    };
+    const page2: ProviderResultSet = {
+      providerId: 'mock',
+      results: [sampleResult(), { ...sampleResult(), providerRecordId: 'mock-clinic-002', companyName: 'عيادة البدر' }],
+      rawEvidence: { page: 2 },
+    };
+    const provider = paginatedProvider([page1, page2]);
+    const { useCase, batches, executions } = harnessWith(page1, { provider });
+
+    const results = await useCase.search({ query: 'عيادات', filters: {} } as SearchQuery, PRINCIPAL);
+
+    assert.equal(results.length, 2);
+    assert.equal(batches.length, 2);
+    assert.equal(batches[0]?.results.length, 1);
+    assert.equal(batches[1]?.results.length, 1);
+    assert.equal(executions.completed[0]?.metrics.duplicateResultCount, 1);
+    assert.equal(executions.completed[0]?.metrics.uniqueResultCount, 2);
+  });
+
+  it('sends the correct pageToken on page 2', async () => {
+    const page1: ProviderResultSet = {
+      providerId: 'mock',
+      results: [sampleResult()],
+      rawEvidence: {},
+      nextPageToken: 'correct-token-for-page-2',
+    };
+    const page2: ProviderResultSet = {
+      providerId: 'mock',
+      results: [{ ...sampleResult(), providerRecordId: 'mock-clinic-002' }],
+      rawEvidence: {},
+    };
+    const capturedQueries: Array<{ pageToken?: string }> = [];
+    const provider: SearchProviderPort = {
+      providerId: 'mock',
+      capabilities: ['search'],
+      search: async (query: SearchQuery) => {
+        capturedQueries.push({ pageToken: query.pageToken });
+        if (capturedQueries.length === 1) return page1;
+        return page2;
+      },
+    } as unknown as SearchProviderPort;
+    const { useCase } = harnessWith(page1, { provider });
+
+    await useCase.search({ query: 'عيادات', filters: {} } as SearchQuery, PRINCIPAL);
+
+    assert.equal(capturedQueries.length, 2);
+    assert.equal(capturedQueries[0]?.pageToken, undefined);
+    assert.equal(capturedQueries[1]?.pageToken, 'correct-token-for-page-2');
+  });
+
+  it('records page failure and marks execution failed', async () => {
+    const page1: ProviderResultSet = {
+      providerId: 'mock',
+      results: [sampleResult()],
+      rawEvidence: {},
+      nextPageToken: 'token-2',
+    };
+    let callCount = 0;
+    const failingAfterPage1: SearchProviderPort = {
+      providerId: 'mock',
+      capabilities: ['search'],
+      search: async () => {
+        callCount++;
+        if (callCount === 1) return page1;
+        throw new ServiceUnavailableException('Service temporarily unavailable', 'page 2 failed');
+      },
+    } as unknown as SearchProviderPort;
+    const { useCase, executions, jobs } = harnessWith(page1, { provider: failingAfterPage1 });
+
+    await assert.rejects(
+      () => useCase.search({ query: 'عيادات', filters: {} } as SearchQuery, PRINCIPAL),
+      ServiceUnavailableException,
+    );
+
+    assert.equal(executions.failed.length, 1);
+    assert.equal(executions.failed[0]?.error, 'page 2 failed');
+    assert.deepEqual(jobs.failed, ['job-1']);
+    assert.deepEqual(jobs.completed, []);
   });
 });

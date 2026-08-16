@@ -17,4 +17,5 @@ export interface RefreshTokenRepository {
   findByTokenHash(tokenHash: string): Promise<RefreshTokenRecord | null>;
   revoke(id: string, options?: { replacedByTokenId?: string; updatedById?: string }): Promise<void>;
   revokeFamily(familyId: string, userId: string): Promise<void>;
+  revokeAllForUser(userId: string): Promise<void>;
 }

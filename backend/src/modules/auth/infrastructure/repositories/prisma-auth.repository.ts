@@ -59,6 +59,13 @@ export class PrismaAuthRepository implements AuthRepository {
       data: { lastLoginAt: at, updatedById: userId },
     });
   }
+
+  async updatePasswordHash(userId: string, passwordHash: string): Promise<void> {
+    await this.prisma.client.user.update({
+      where: { id: userId },
+      data: { passwordHash, updatedById: userId },
+    });
+  }
 }
 
 function toUserAccount(row: {

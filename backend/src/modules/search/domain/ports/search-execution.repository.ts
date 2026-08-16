@@ -14,6 +14,10 @@ export interface SearchExecutionMetrics {
   pagesRequested?: number;
   uniqueResultCount?: number;
   duplicateResultCount?: number;
+  discoveredCount?: number;
+  qualifiedCount?: number;
+  rejectedCount?: number;
+  unverifiedCount?: number;
 }
 
 export interface CreateSearchExecutionInput {

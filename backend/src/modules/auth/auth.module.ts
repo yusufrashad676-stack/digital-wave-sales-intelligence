@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import type { JwtAlgorithm } from '../../config/configuration.js';
+import { ChangePasswordUseCase } from './application/use-cases/change-password.usecase.js';
 import { RegisterUserUseCase } from './application/use-cases/register-user.usecase.js';
 import { LoginUseCase } from './application/use-cases/login.usecase.js';
 import { RefreshTokensUseCase } from './application/use-cases/refresh-tokens.usecase.js';
@@ -43,6 +44,7 @@ import { RolesGuard } from './presentation/guards/roles.guard.js';
     RefreshTokensUseCase,
     LogoutUseCase,
     GetMeUseCase,
+    ChangePasswordUseCase,
     AuthGuard,
     RolesGuard,
   ],

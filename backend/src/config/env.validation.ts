@@ -10,6 +10,25 @@ const DEV_DEFAULT_ORIGINS = ['http://localhost:5173', 'http://localhost:3000'];
 
 const MIN_JWT_SECRET_LENGTH = 32;
 
+const JWT_SECRET_PLACEHOLDER_PATTERNS = [
+  'replace_with',
+  'change-me',
+  'change_me',
+  'your-secret',
+  'your_secret',
+  'your-secret-here',
+  'your_secret_here',
+  'example',
+  'test-secret',
+  'test_secret',
+  'changeme',
+  'changeme123',
+  'password',
+  'secret',
+  'my-secret',
+  'my_secret',
+];
+
 const DEFAULT_SEARCH_MAX_RESULTS = 20;
 
 const DEFAULT_SEARCH_GOOGLE_TIMEOUT_MS = 5000;
@@ -77,6 +96,18 @@ export function validateEnv(config: Record<string, unknown>): AppConfig {
   const refreshSecret = toOptionalString(config.JWT_REFRESH_SECRET);
   if (!refreshSecret || refreshSecret.length < MIN_JWT_SECRET_LENGTH) {
     problems.push(`JWT_REFRESH_SECRET is required and must be at least ${MIN_JWT_SECRET_LENGTH} characters`);
+  }
+
+  if (accessSecret && refreshSecret && accessSecret === refreshSecret) {
+    problems.push('JWT_SECRET and JWT_REFRESH_SECRET must be distinct');
+  }
+
+  if (accessSecret && containsPlaceholder(accessSecret)) {
+    problems.push('JWT_SECRET contains a placeholder pattern — replace with a strong random value');
+  }
+
+  if (refreshSecret && containsPlaceholder(refreshSecret)) {
+    problems.push('JWT_REFRESH_SECRET contains a placeholder pattern — replace with a strong random value');
   }
 
   const accessTtlSeconds = toInteger(config.JWT_ACCESS_TTL, 900);
@@ -155,4 +186,9 @@ export function validateEnv(config: Record<string, unknown>): AppConfig {
       googleTimeoutMs: searchGoogleTimeoutMs,
     },
   };
+}
+
+function containsPlaceholder(value: string): boolean {
+  const lower = value.toLowerCase();
+  return JWT_SECRET_PLACEHOLDER_PATTERNS.some((pattern) => lower.includes(pattern));
 }

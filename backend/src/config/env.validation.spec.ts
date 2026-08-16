@@ -149,6 +149,40 @@ describe('validateEnv', () => {
     assert.throws(() => validateEnv({ ...BASE_ENV, SEARCH_GOOGLE_TIMEOUT_MS: '0' }), /SEARCH_GOOGLE_TIMEOUT_MS/);
   });
 
+  it('rejects identical JWT secrets', () => {
+    const sameSecret = 'a'.repeat(40);
+    assert.throws(
+      () => validateEnv({ ...BASE_ENV, JWT_SECRET: sameSecret, JWT_REFRESH_SECRET: sameSecret }),
+      /must be distinct/,
+    );
+  });
+
+  it('rejects placeholder patterns in JWT_SECRET', () => {
+    assert.throws(
+      () => validateEnv({ ...BASE_ENV, JWT_SECRET: 'REPLACE_WITH_RANDOM_ACCESS_SECRET_AT_LEAST_32' }),
+      /placeholder/,
+    );
+    assert.throws(() => validateEnv({ ...BASE_ENV, JWT_SECRET: 'change-me-please-change-me-now!!' }), /placeholder/);
+    assert.throws(() => validateEnv({ ...BASE_ENV, JWT_SECRET: 'passwordpasswordpasswordpassword!' }), /placeholder/);
+  });
+
+  it('rejects placeholder patterns in JWT_REFRESH_SECRET', () => {
+    assert.throws(
+      () => validateEnv({ ...BASE_ENV, JWT_REFRESH_SECRET: 'REPLACE_WITH_RANDOM_REFRESH_SECRET_AT_LEAST' }),
+      /placeholder/,
+    );
+  });
+
+  it('accepts strong random-looking secrets', () => {
+    const config = validateEnv({
+      ...BASE_ENV,
+      JWT_SECRET: 'xK9#mP2$vL5@nQ8!rT3&wZ6*yJ1!abcD',
+      JWT_REFRESH_SECRET: 'fH4#cD7%gB0^kJ2*sM5(eW8!qR1!xyzZ',
+    });
+    assert.equal(config.auth.jwt.accessSecret, 'xK9#mP2$vL5@nQ8!rT3&wZ6*yJ1!abcD');
+    assert.equal(config.auth.jwt.refreshSecret, 'fH4#cD7%gB0^kJ2*sM5(eW8!qR1!xyzZ');
+  });
+
   it('parses search tuning values', () => {
     const config = validateEnv({
       ...BASE_ENV,

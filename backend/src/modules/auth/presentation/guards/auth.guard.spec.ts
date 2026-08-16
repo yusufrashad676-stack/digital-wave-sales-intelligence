@@ -6,6 +6,7 @@ import type { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AUTH_PRINCIPAL_KEY, IS_PUBLIC_KEY } from '../../../../common/constants/auth.constants.js';
 import { UnauthorizedException } from '../../../../common/exceptions/unauthorized.exception.js';
+import type { AuditPort } from '../../domain/ports/audit.port.js';
 import type { TokenPort } from '../../domain/ports/token.port.js';
 import { AuthGuard } from './auth.guard.js';
 
@@ -30,12 +31,14 @@ const tokenPort = {
   verifyAccessToken: async () => ({ sub: 'user-1', roles: ['GUEST'], type: 'access' }),
 } as unknown as TokenPort;
 
+const auditPort = { record: () => {} } as unknown as AuditPort;
+
 describe('AuthGuard', () => {
   it('allows public routes without a token', async () => {
     const { handler, context } = makeContext();
     Reflect.defineMetadata(IS_PUBLIC_KEY, true, handler);
 
-    const allowed = await new AuthGuard(new Reflector(), tokenPort).canActivate(context);
+    const allowed = await new AuthGuard(new Reflector(), tokenPort, auditPort).canActivate(context);
 
     assert.equal(allowed, true);
   });
@@ -43,27 +46,33 @@ describe('AuthGuard', () => {
   it('rejects a request with no Authorization header', async () => {
     const { context } = makeContext();
 
-    await assert.rejects(() => new AuthGuard(new Reflector(), tokenPort).canActivate(context), UnauthorizedException);
+    await assert.rejects(
+      () => new AuthGuard(new Reflector(), tokenPort, auditPort).canActivate(context),
+      UnauthorizedException,
+    );
   });
 
   it('rejects a malformed Authorization header', async () => {
     const { request, context } = makeContext();
     request.headers = { authorization: 'Basic abc123' };
 
-    await assert.rejects(() => new AuthGuard(new Reflector(), tokenPort).canActivate(context), UnauthorizedException);
+    await assert.rejects(
+      () => new AuthGuard(new Reflector(), tokenPort, auditPort).canActivate(context),
+      UnauthorizedException,
+    );
   });
 
   it('attaches the principal from a valid bearer token', async () => {
     const { request, context } = makeContext();
     request.headers = { authorization: 'Bearer valid.token' };
 
-    const allowed = await new AuthGuard(new Reflector(), tokenPort).canActivate(context);
+    const allowed = await new AuthGuard(new Reflector(), tokenPort, auditPort).canActivate(context);
 
     assert.equal(allowed, true);
     assert.deepEqual(request[AUTH_PRINCIPAL_KEY], { userId: 'user-1', roles: ['GUEST'], tokenType: 'access' });
   });
 
-  it('propagates verification failures', async () => {
+  it('propagates verification failures and emits audit event', async () => {
     const { request, context } = makeContext();
     request.headers = { authorization: 'Bearer bad.token' };
     const failingTokenPort = {
@@ -72,9 +81,13 @@ describe('AuthGuard', () => {
       },
     } as unknown as TokenPort;
 
+    const auditEvents: string[] = [];
+    const auditingPort = { record: (event: { code: string }) => auditEvents.push(event.code) } as unknown as AuditPort;
+
     await assert.rejects(
-      () => new AuthGuard(new Reflector(), failingTokenPort).canActivate(context),
+      () => new AuthGuard(new Reflector(), failingTokenPort, auditingPort).canActivate(context),
       UnauthorizedException,
     );
+    assert.deepEqual(auditEvents, ['auth.token.verify_failure']);
   });
 });

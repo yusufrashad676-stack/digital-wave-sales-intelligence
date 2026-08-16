@@ -15,4 +15,5 @@ export interface AuthRepository {
   createUserWithRole(input: CreateUserInput): Promise<UserAccount>;
   findSystemRoles(userId: string): Promise<string[]>;
   recordLogin(userId: string, at: Date): Promise<void>;
+  updatePasswordHash(userId: string, passwordHash: string): Promise<void>;
 }

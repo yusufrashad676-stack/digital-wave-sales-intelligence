@@ -84,6 +84,62 @@ describe('JwtTokenAdapter', () => {
     await assert.rejects(() => adapter.verifyAccessToken(`${token.slice(0, -1)}x`), UnauthorizedException);
   });
 
+  it('rejects an expired access token', async () => {
+    const expiredAdapter = new JwtTokenAdapter(
+      new JwtService({}),
+      new ConfigService({
+        auth: {
+          jwt: {
+            accessSecret: ACCESS_SECRET,
+            refreshSecret: REFRESH_SECRET,
+            accessTtlSeconds: 1,
+            refreshTtlSeconds: 2592000,
+            algorithm: 'HS256',
+          },
+        },
+      }),
+    );
+    const token = await expiredAdapter.signAccessToken({ sub: 'user-1', roles: ['GUEST'], type: 'access' });
+
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+
+    await assert.rejects(() => expiredAdapter.verifyAccessToken(token), UnauthorizedException);
+  });
+
+  it('rejects an expired refresh token', async () => {
+    const expiredAdapter = new JwtTokenAdapter(
+      new JwtService({}),
+      new ConfigService({
+        auth: {
+          jwt: {
+            accessSecret: ACCESS_SECRET,
+            refreshSecret: REFRESH_SECRET,
+            accessTtlSeconds: 900,
+            refreshTtlSeconds: 1,
+            algorithm: 'HS256',
+          },
+        },
+      }),
+    );
+    const signed = await expiredAdapter.signRefreshToken({ sub: 'user-1', familyId: 'f1', type: 'refresh' });
+
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+
+    await assert.rejects(() => expiredAdapter.verifyRefreshToken(signed.token), UnauthorizedException);
+  });
+
+  it('rejects a malformed (non-JWT) token', async () => {
+    const adapter = makeAdapter();
+
+    await assert.rejects(() => adapter.verifyAccessToken('not-a-jwt-token'), UnauthorizedException);
+    await assert.rejects(() => adapter.verifyRefreshToken('not-a-jwt-token'), UnauthorizedException);
+    await assert.rejects(() => adapter.verifyAccessToken(''), UnauthorizedException);
+    await assert.rejects(
+      () => adapter.verifyAccessToken('eyJhbGciOiJub25lIn0.eyJzdWIiOiIxIn0.'),
+      UnauthorizedException,
+    );
+  });
+
   it('hashes refresh tokens deterministically', () => {
     const adapter = makeAdapter();
     const first = adapter.hashRefreshToken('refresh.token');

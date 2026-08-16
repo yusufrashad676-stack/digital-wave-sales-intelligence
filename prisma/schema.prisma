@@ -10,7 +10,7 @@
 
 generator client {
   provider = "prisma-client"
-  output   = "../generated/prisma"
+  output   = "../backend/src/database/generated/prisma"
 }
 
 datasource db {
@@ -70,6 +70,45 @@ enum CompanyStatus {
 enum BranchStatus {
   ACTIVE
   INACTIVE
+}
+
+enum SearchJobStatus {
+  DRAFT
+  SCHEDULED
+  RUNNING
+  COMPLETED
+  FAILED
+  PAUSED
+  CANCELLED
+}
+
+enum SearchExecutionStatus {
+  CREATED
+  RUNNING
+  COMPLETED
+  FAILED
+  TIMED_OUT
+  CANCELLED
+}
+
+enum SearchExecutionTrigger {
+  MANUAL
+  SCHEDULE
+  WORKFLOW
+}
+
+enum SearchResultVerificationStatus {
+  VERIFIED
+  UNVERIFIED
+  UNKNOWN
+}
+
+enum LeadStatus {
+  NEW
+  REVIEWED
+  CONTACTED
+  QUALIFIED
+  DISQUALIFIED
 }
 
 model User {
@@ -202,8 +241,32 @@ model User {
   deletedCompanyCategories      CompanyCategory[]      @relation("CompanyCategoryDeletedBy")
   assignedCompanyCategories     CompanyCategory[]      @relation("CompanyCategoryAssignedBy")
 
+  createdImportSources ImportSource[] @relation("ImportSourceCreatedBy")
+  updatedImportSources ImportSource[] @relation("ImportSourceUpdatedBy")
+  deletedImportSources ImportSource[] @relation("ImportSourceDeletedBy")
+
+  ownedSearchJobs   SearchJob[] @relation("SearchJobOwner")
+  createdSearchJobs SearchJob[] @relation("SearchJobCreatedBy")
+  updatedSearchJobs SearchJob[] @relation("SearchJobUpdatedBy")
+  deletedSearchJobs SearchJob[] @relation("SearchJobDeletedBy")
+
+  createdSearchExecutions SearchExecution[] @relation("SearchExecutionCreatedBy")
+  updatedSearchExecutions SearchExecution[] @relation("SearchExecutionUpdatedBy")
+
+  createdRawImports RawImport[] @relation("RawImportCreatedBy")
+  updatedRawImports RawImport[] @relation("RawImportUpdatedBy")
+
+  createdSearchResults SearchResult[] @relation("SearchResultCreatedBy")
+  updatedSearchResults SearchResult[] @relation("SearchResultUpdatedBy")
+  deletedSearchResults SearchResult[] @relation("SearchResultDeletedBy")
+
   createdRefreshTokens RefreshToken[] @relation("RefreshTokenCreatedBy")
   updatedRefreshTokens RefreshToken[] @relation("RefreshTokenUpdatedBy")
+
+  leads      Lead[] @relation("LeadOwner")
+  createdLeads Lead[] @relation("LeadCreatedBy")
+  updatedLeads Lead[] @relation("LeadUpdatedBy")
+  deletedLeads Lead[] @relation("LeadDeletedBy")
 
   @@index([status], map: "idx_users_status")
   @@index([lastLoginAt], map: "idx_users_last_login_at")
@@ -231,8 +294,9 @@ model Workspace {
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
 
-  users UserWorkspace[] @relation("UserWorkspaceWorkspace")
-  roles Role[]          @relation("RoleWorkspace")
+  users      UserWorkspace[] @relation("UserWorkspaceWorkspace")
+  roles      Role[]          @relation("RoleWorkspace")
+  searchJobs SearchJob[]     @relation("SearchJobWorkspace")
 
   @@index([status], map: "idx_workspaces_status")
   @@index([createdById], map: "idx_workspaces_created_by_id")
@@ -493,6 +557,7 @@ model Company {
   companySocialProfiles CompanySocialProfile[]
   companyCategories     CompanyCategory[]
   companyTags           CompanyTag[]
+  searchResults         SearchResult[]
 
   @@index([name], map: "idx_companies_name")
   @@index([jurisdiction, registrationNumber], map: "idx_companies_jurisdiction_registration_number")
@@ -1241,4 +1306,237 @@ model RefreshToken {
   @@index([createdById], map: "idx_refresh_tokens_created_by_id")
   @@index([updatedById], map: "idx_refresh_tokens_updated_by_id")
   @@map("refresh_tokens")
+}
+
+// Search pipeline persistence (IMPLEMENTATION_RESTART_PLAN.md §6 — slice 1).
+// Provenance trail: Import Source → Search Job → Search Execution → Raw Import →
+// Search Result. ImportSource is a registry row (seeded, no secrets); SearchJob is
+// the durable search intent; SearchExecution is one run of a job; RawImport is the
+// immutable, byte-faithful evidence capture (append-only, no soft delete); SearchResult
+// is the normalized read model with an advisory, nullable companyId match link.
+model ImportSource {
+  id           String  @id @default(uuid()) @map("id")
+  code         String  @unique(map: "uq_import_sources_code") @map("code") @db.VarChar(64)
+  name         String  @map("name") @db.VarChar(255)
+  category     String  @map("category") @db.VarChar(64)
+  enabled      Boolean @default(true) @map("enabled")
+  capabilities Json    @map("capabilities")
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("ImportSourceCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("ImportSourceUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("ImportSourceDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  executions SearchExecution[]
+  rawImports RawImport[]
+
+  @@index([category], map: "idx_import_sources_category")
+  @@index([enabled], map: "idx_import_sources_enabled")
+  @@index([createdById], map: "idx_import_sources_created_by_id")
+  @@index([updatedById], map: "idx_import_sources_updated_by_id")
+  @@index([deletedById], map: "idx_import_sources_deleted_by_id")
+  @@map("import_sources")
+}
+
+model SearchJob {
+  id          String          @id @default(uuid()) @map("id")
+  query       String          @map("query") @db.VarChar(500)
+  filters     Json            @map("filters")
+  status      SearchJobStatus @default(DRAFT) @map("status")
+  userId      String?         @map("user_id")
+  user        User?           @relation("SearchJobOwner", fields: [userId], references: [id], onDelete: Restrict)
+  workspaceId String?         @map("workspace_id")
+  workspace   Workspace?      @relation("SearchJobWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("SearchJobCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("SearchJobUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("SearchJobDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  executions SearchExecution[]
+
+  @@index([userId, createdAt], map: "idx_search_jobs_user_id_created_at")
+  @@index([status, createdAt], map: "idx_search_jobs_status_created_at")
+  @@index([workspaceId], map: "idx_search_jobs_workspace_id")
+  @@index([createdById], map: "idx_search_jobs_created_by_id")
+  @@index([updatedById], map: "idx_search_jobs_updated_by_id")
+  @@index([deletedById], map: "idx_search_jobs_deleted_by_id")
+  @@map("search_jobs")
+}
+
+model SearchExecution {
+  id              String                 @id @default(uuid()) @map("id")
+  jobId           String                 @map("job_id")
+  job             SearchJob              @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  attempt         Int                    @default(1) @map("attempt")
+  trigger         SearchExecutionTrigger @default(MANUAL) @map("trigger")
+  status          SearchExecutionStatus  @default(CREATED) @map("status")
+  importSourceId  String                 @map("import_source_id")
+  importSource    ImportSource           @relation(fields: [importSourceId], references: [id], onDelete: Restrict)
+  providerRequest Json?                  @map("provider_request")
+  startedAt       DateTime?              @map("started_at") @db.Timestamptz
+  finishedAt      DateTime?              @map("finished_at") @db.Timestamptz
+  metrics         Json?                  @map("metrics")
+  error           String?                @map("error") @db.VarChar(2000)
+  correlationId   String?                @map("correlation_id") @db.VarChar(64)
+
+  createdById String?  @map("created_by_id")
+  createdBy   User?    @relation("SearchExecutionCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?  @map("updated_by_id")
+  updatedBy   User?    @relation("SearchExecutionUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  rawImports RawImport[]
+  results    SearchResult[]
+
+  @@index([jobId, createdAt], map: "idx_search_executions_job_id_created_at")
+  @@index([importSourceId, status], map: "idx_search_executions_import_source_id_status")
+  @@index([status], map: "idx_search_executions_status")
+  @@index([correlationId], map: "idx_search_executions_correlation_id")
+  @@index([createdById], map: "idx_search_executions_created_by_id")
+  @@index([updatedById], map: "idx_search_executions_updated_by_id")
+  @@map("search_executions")
+}
+
+// Append-only evidence: payload is written once and never updated. contentHash is
+// the capture-time idempotency fingerprint (generation algorithm deferred to the
+// runtime persistence wiring phase); nullable + unique so NULLs remain distinct.
+model RawImport {
+  id             String           @id @default(uuid()) @map("id")
+  executionId    String?          @map("execution_id")
+  execution      SearchExecution? @relation(fields: [executionId], references: [id], onDelete: Restrict)
+  importSourceId String           @map("import_source_id")
+  importSource   ImportSource     @relation(fields: [importSourceId], references: [id], onDelete: Restrict)
+  externalId     String?          @map("external_id") @db.VarChar(512)
+  format         String           @map("format") @db.VarChar(64)
+  payload        Json             @map("payload")
+  contentHash    String?          @unique(map: "uq_raw_imports_content_hash") @map("content_hash") @db.VarChar(128)
+  payloadSize    Int?             @map("payload_size")
+  recordCount    Int?             @map("record_count")
+  receivedAt     DateTime         @default(now()) @map("received_at") @db.Timestamptz
+  correlationId  String?          @map("correlation_id") @db.VarChar(64)
+
+  createdById String?  @map("created_by_id")
+  createdBy   User?    @relation("RawImportCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?  @map("updated_by_id")
+  updatedBy   User?    @relation("RawImportUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  results SearchResult[]
+
+  @@index([executionId, externalId], map: "idx_raw_imports_execution_id_external_id")
+  @@index([importSourceId, receivedAt], map: "idx_raw_imports_import_source_id_received_at")
+  @@index([receivedAt], map: "idx_raw_imports_received_at")
+  @@index([createdById], map: "idx_raw_imports_created_by_id")
+  @@index([updatedById], map: "idx_raw_imports_updated_by_id")
+  @@map("raw_imports")
+}
+
+// Normalized read model. companyId is an advisory basic-match link into the existing
+// canonical Company table (advisory matching only — never an auto-merge).
+model SearchResult {
+  id                 String                         @id @default(uuid()) @map("id")
+  executionId        String                         @map("execution_id")
+  execution          SearchExecution                @relation(fields: [executionId], references: [id], onDelete: Restrict)
+  rawImportId        String?                        @map("raw_import_id")
+  rawImport          RawImport?                     @relation(fields: [rawImportId], references: [id], onDelete: Restrict)
+  providerId         String                         @map("provider_id") @db.VarChar(64)
+  providerRecordId   String                         @map("provider_record_id") @db.VarChar(512)
+  companyName        String                         @map("company_name") @db.VarChar(255)
+  category           String?                        @map("category") @db.VarChar(128)
+  formattedAddress   String?                        @map("formatted_address") @db.VarChar(1024)
+  area               String?                        @map("area") @db.VarChar(255)
+  latitude           Float?                         @map("latitude")
+  longitude          Float?                         @map("longitude")
+  phone              String?                        @map("phone") @db.VarChar(64)
+  email              String?                        @map("email") @db.VarChar(320)
+  websiteDomain      String?                        @map("website_domain") @db.VarChar(255)
+  rating             Float?                         @map("rating")
+  ratingCount        Int?                           @map("rating_count")
+  sourceUrl          String?                        @map("source_url") @db.VarChar(2048)
+  ordering           Int                            @default(0) @map("ordering")
+  verificationStatus SearchResultVerificationStatus @default(UNKNOWN) @map("verification_status")
+  companyId          String?                        @map("company_id")
+  company            Company?                       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  retrievedAt        DateTime                       @map("retrieved_at") @db.Timestamptz
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("SearchResultCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("SearchResultUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("SearchResultDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@unique([executionId, providerRecordId], map: "uq_search_results_execution_id_provider_record_id")
+  @@index([executionId, ordering], map: "idx_search_results_execution_id_ordering")
+  @@index([companyId], map: "idx_search_results_company_id")
+  @@index([providerRecordId], map: "idx_search_results_provider_record_id")
+  @@index([createdById], map: "idx_search_results_created_by_id")
+  @@index([updatedById], map: "idx_search_results_updated_by_id")
+  @@index([deletedById], map: "idx_search_results_deleted_by_id")
+  @@map("search_results")
+}
+
+// User-scoped saved lead: a snapshot of a discovered business that the user
+// decided to pursue. Business fields are copied at save time so a lead stays
+// stable even if the provider data or the original search result changes.
+// Soft-delete-aware uniqueness on (user_id, provider_record_id) is enforced by
+// a SQL partial unique index (see DATABASE_RULES.md SQL Partial Index Registry).
+model Lead {
+  id          String     @id @default(uuid()) @map("id")
+  userId      String     @map("user_id")
+  user        User       @relation("LeadOwner", fields: [userId], references: [id], onDelete: Restrict)
+  status      LeadStatus @default(NEW) @map("status")
+  notes       String?    @map("notes") @db.VarChar(4000)
+
+  providerId         String                         @map("provider_id") @db.VarChar(64)
+  providerRecordId   String                         @map("provider_record_id") @db.VarChar(512)
+  companyName        String                         @map("company_name") @db.VarChar(255)
+  category           String?                        @map("category") @db.VarChar(128)
+  formattedAddress   String?                        @map("formatted_address") @db.VarChar(1024)
+  area               String?                        @map("area") @db.VarChar(255)
+  latitude           Float?                         @map("latitude")
+  longitude          Float?                         @map("longitude")
+  phone              String?                        @map("phone") @db.VarChar(64)
+  email              String?                        @map("email") @db.VarChar(320)
+  websiteDomain      String?                        @map("website_domain") @db.VarChar(255)
+  rating             Float?                         @map("rating")
+  ratingCount        Int?                           @map("rating_count")
+  sourceUrl          String?                        @map("source_url") @db.VarChar(2048)
+  verificationStatus SearchResultVerificationStatus @default(UNKNOWN) @map("verification_status")
+  retrievedAt        DateTime                       @map("retrieved_at") @db.Timestamptz
+  savedAt            DateTime                       @default(now()) @map("saved_at") @db.Timestamptz
+
+  createdById String?   @map("created_by_id")
+  createdBy   User?     @relation("LeadCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?   @map("updated_by_id")
+  updatedBy   User?     @relation("LeadUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  deletedById String?   @map("deleted_by_id")
+  deletedBy   User?     @relation("LeadDeletedBy", fields: [deletedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@index([userId, createdAt], map: "idx_leads_user_id_created_at")
+  @@index([userId, status], map: "idx_leads_user_id_status")
+  @@index([providerRecordId], map: "idx_leads_provider_record_id")
+  @@index([createdById], map: "idx_leads_created_by_id")
+  @@index([updatedById], map: "idx_leads_updated_by_id")
+  @@index([deletedById], map: "idx_leads_deleted_by_id")
+  @@map("leads")
 }

@@ -6,7 +6,7 @@ node_modules/
 .env.*.local
 
 # generated Prisma client
-/generated/prisma
+/backend/src/database/generated/prisma
 
 # OS / editor
 .DS_Store
@@ -25,3 +25,8 @@ build/
 .turbo/
 .vercel/
 .env.local
+.vercel
+.env*
+
+# derived handoff artifact
+digital-wave-sales-intelligence-handoff.zip

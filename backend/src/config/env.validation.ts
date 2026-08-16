@@ -1,12 +1,18 @@
-import type { AppConfig, JwtAlgorithm, NodeEnv } from './configuration.js';
+import type { AppConfig, JwtAlgorithm, NodeEnv, SearchProviderName } from './configuration.js';
 
 const NODE_ENVS: NodeEnv[] = ['development', 'test', 'production'];
 
 const JWT_ALGORITHMS: JwtAlgorithm[] = ['HS256', 'HS384', 'HS512'];
 
+const SEARCH_PROVIDERS: SearchProviderName[] = ['mock', 'google-places'];
+
 const DEV_DEFAULT_ORIGINS = ['http://localhost:5173', 'http://localhost:3000'];
 
 const MIN_JWT_SECRET_LENGTH = 32;
+
+const DEFAULT_SEARCH_MAX_RESULTS = 20;
+
+const DEFAULT_SEARCH_GOOGLE_TIMEOUT_MS = 5000;
 
 function toOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
@@ -99,6 +105,30 @@ export function validateEnv(config: Record<string, unknown>): AppConfig {
     problems.push('AUTH_THROTTLE_LIMIT must be an integer >= 1');
   }
 
+  const googleMapsApiKey = toOptionalString(config.GOOGLE_MAPS_API_KEY);
+
+  const rawSearchProvider = toOptionalString(config.SEARCH_PROVIDER);
+  const normalizedSearchProvider =
+    rawSearchProvider === undefined ? undefined : (rawSearchProvider.toLowerCase() as SearchProviderName);
+  if (rawSearchProvider !== undefined && !SEARCH_PROVIDERS.includes(normalizedSearchProvider as SearchProviderName)) {
+    problems.push(`SEARCH_PROVIDER must be one of: ${SEARCH_PROVIDERS.join(', ')}`);
+  }
+
+  const searchProvider: SearchProviderName = normalizedSearchProvider ?? (googleMapsApiKey ? 'google-places' : 'mock');
+  if (searchProvider === 'google-places' && googleMapsApiKey === undefined) {
+    problems.push('GOOGLE_MAPS_API_KEY is required when SEARCH_PROVIDER is "google-places"');
+  }
+
+  const searchMaxResults = toInteger(config.SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS);
+  if (!Number.isInteger(searchMaxResults) || searchMaxResults < 1 || searchMaxResults > 20) {
+    problems.push('SEARCH_MAX_RESULTS must be an integer between 1 and 20');
+  }
+
+  const searchGoogleTimeoutMs = toInteger(config.SEARCH_GOOGLE_TIMEOUT_MS, DEFAULT_SEARCH_GOOGLE_TIMEOUT_MS);
+  if (!Number.isInteger(searchGoogleTimeoutMs) || searchGoogleTimeoutMs < 1) {
+    problems.push('SEARCH_GOOGLE_TIMEOUT_MS must be an integer >= 1');
+  }
+
   if (problems.length > 0) {
     throw new Error(`Invalid environment configuration:\n- ${problems.join('\n- ')}`);
   }
@@ -117,6 +147,12 @@ export function validateEnv(config: Record<string, unknown>): AppConfig {
         algorithm,
       },
       throttle: { ttlSeconds: authTtlSeconds, limit: authLimit },
+    },
+    search: {
+      provider: searchProvider,
+      googleMapsApiKey,
+      maxResults: searchMaxResults,
+      googleTimeoutMs: searchGoogleTimeoutMs,
     },
   };
 }

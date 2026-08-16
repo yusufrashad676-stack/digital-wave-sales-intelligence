@@ -2,6 +2,8 @@ export type NodeEnv = 'development' | 'test' | 'production';
 
 export type JwtAlgorithm = 'HS256' | 'HS384' | 'HS512';
 
+export type SearchProviderName = 'mock' | 'google-places';
+
 export type AppConfig = {
   app: {
     nodeEnv: NodeEnv;
@@ -29,5 +31,11 @@ export type AppConfig = {
       ttlSeconds: number;
       limit: number;
     };
+  };
+  search: {
+    provider: SearchProviderName;
+    googleMapsApiKey?: string;
+    maxResults: number;
+    googleTimeoutMs: number;
   };
 };

@@ -174,6 +174,7 @@ Prisma cannot represent them. Keep this registry in sync with the live database:
 | 7 | `person_contact_methods` | `uq_person_contact_methods_method_active` | `UNIQUE (contact_method_id) WHERE deleted_at IS NULL` | ADR-006 (single owner) |
 | 8 | `company_contact_methods` | `uq_company_contact_methods_method_active` | `UNIQUE (contact_method_id) WHERE deleted_at IS NULL` | ADR-006 (single owner) |
 | 9 | `branch_contact_methods` | `uq_branch_contact_methods_method_active` | `UNIQUE (contact_method_id) WHERE deleted_at IS NULL` | ADR-006 (single owner) |
+| 10 | `leads` | `uq_leads_user_provider_active` | `UNIQUE (user_id, provider_record_id) WHERE deleted_at IS NULL` | Saved-lead idempotency |
 
 Future additions to this registry: expression/prefix indexes (name matching),
 full-text (tsvector/trigram), and spatial indexes (ADR-008) when those features

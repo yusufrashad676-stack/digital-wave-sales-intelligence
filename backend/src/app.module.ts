@@ -9,6 +9,8 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { AuthGuard } from './modules/auth/presentation/guards/auth.guard.js';
 import { RolesGuard } from './modules/auth/presentation/guards/roles.guard.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { LeadsModule } from './modules/leads/leads.module.js';
+import { SearchModule } from './modules/search/search.module.js';
 
 @Module({
   imports: [
@@ -32,6 +34,8 @@ import { HealthModule } from './modules/health/health.module.js';
     CommonModule,
     AuthModule,
     HealthModule,
+    SearchModule,
+    LeadsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

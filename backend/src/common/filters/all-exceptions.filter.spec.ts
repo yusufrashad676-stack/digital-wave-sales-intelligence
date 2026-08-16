@@ -3,7 +3,7 @@ import { BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
 import { describe, it } from 'node:test';
 import type { ArgumentsHost } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { Prisma } from '../../../../generated/prisma/client.js';
+import { Prisma } from '../../database/generated/prisma/client.js';
 import { RequestContextService } from '../context/request-context.service.js';
 import { NotFoundException } from '../exceptions/not-found.exception.js';
 import { ErrorCode } from '../exceptions/error-codes.js';

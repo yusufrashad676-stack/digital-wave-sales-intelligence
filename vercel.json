@@ -1,0 +1,24 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build && npm --prefix frontend ci && npm --prefix frontend run build",
+  "builds": [
+    {
+      "src": "frontend/dist/**",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "dist/backend/src/serverless.js",
+      "use": "@vercel/node",
+      "config": { "maxDuration": 30 }
+    }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/dist/backend/src/serverless.js" },
+    { "src": "/docs(.*)", "dest": "/dist/backend/src/serverless.js" },
+    { "src": "/", "dest": "/frontend/dist/index.html" },
+    { "src": "/assets/(.*)", "dest": "/frontend/dist/assets/$1" },
+    { "src": "/favicon.svg", "dest": "/frontend/dist/favicon.svg" },
+    { "src": "/index.html", "dest": "/frontend/dist/index.html" },
+    { "src": "/(.*)", "dest": "/frontend/dist/index.html" }
+  ]
+}

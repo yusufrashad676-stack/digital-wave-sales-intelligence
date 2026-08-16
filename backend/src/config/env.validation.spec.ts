@@ -104,4 +104,60 @@ describe('validateEnv', () => {
     assert.equal(config.throttle.ttlSeconds, 5);
     assert.equal(config.throttle.limit, 20);
   });
+
+  it('defaults the search provider to mock without a Google key', () => {
+    const config = validateEnv(BASE_ENV);
+    assert.equal(config.search.provider, 'mock');
+    assert.equal(config.search.googleMapsApiKey, undefined);
+    assert.equal(config.search.maxResults, 20);
+    assert.equal(config.search.googleTimeoutMs, 5000);
+  });
+
+  it('selects google-places when a Google key is present', () => {
+    const config = validateEnv({ ...BASE_ENV, GOOGLE_MAPS_API_KEY: 'AIza-test' });
+    assert.equal(config.search.provider, 'google-places');
+    assert.equal(config.search.googleMapsApiKey, 'AIza-test');
+  });
+
+  it('forces the mock provider when SEARCH_PROVIDER=mock and a key is present', () => {
+    const config = validateEnv({ ...BASE_ENV, GOOGLE_MAPS_API_KEY: 'AIza-test', SEARCH_PROVIDER: 'mock' });
+    assert.equal(config.search.provider, 'mock');
+  });
+
+  it('parses SEARCH_PROVIDER case-insensitively', () => {
+    const config = validateEnv({ ...BASE_ENV, GOOGLE_MAPS_API_KEY: 'AIza-test', SEARCH_PROVIDER: 'Google-Places' });
+    assert.equal(config.search.provider, 'google-places');
+  });
+
+  it('rejects an unsupported SEARCH_PROVIDER', () => {
+    assert.throws(() => validateEnv({ ...BASE_ENV, SEARCH_PROVIDER: 'bing' }), /SEARCH_PROVIDER/);
+  });
+
+  it('rejects google-places without an API key', () => {
+    assert.throws(
+      () => validateEnv({ ...BASE_ENV, SEARCH_PROVIDER: 'google-places' }),
+      /GOOGLE_MAPS_API_KEY is required/,
+    );
+  });
+
+  it('rejects out-of-range SEARCH_MAX_RESULTS', () => {
+    assert.throws(() => validateEnv({ ...BASE_ENV, SEARCH_MAX_RESULTS: '0' }), /SEARCH_MAX_RESULTS/);
+    assert.throws(() => validateEnv({ ...BASE_ENV, SEARCH_MAX_RESULTS: '21' }), /SEARCH_MAX_RESULTS/);
+  });
+
+  it('rejects a non-positive SEARCH_GOOGLE_TIMEOUT_MS', () => {
+    assert.throws(() => validateEnv({ ...BASE_ENV, SEARCH_GOOGLE_TIMEOUT_MS: '0' }), /SEARCH_GOOGLE_TIMEOUT_MS/);
+  });
+
+  it('parses search tuning values', () => {
+    const config = validateEnv({
+      ...BASE_ENV,
+      GOOGLE_MAPS_API_KEY: 'AIza-test',
+      SEARCH_MAX_RESULTS: '10',
+      SEARCH_GOOGLE_TIMEOUT_MS: '3000',
+    });
+    assert.equal(config.search.provider, 'google-places');
+    assert.equal(config.search.maxResults, 10);
+    assert.equal(config.search.googleTimeoutMs, 3000);
+  });
 });

@@ -23,6 +23,6 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["backend/src/**/*", "generated/prisma/**/*"],
+  "include": ["backend/src/**/*"],
   "exclude": ["node_modules", "dist"]
 }

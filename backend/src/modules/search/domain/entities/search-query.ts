@@ -1,8 +1,11 @@
+import type { SearchIntent } from './search-intent.js';
+
 export interface SearchFilters {
   governorate?: string;
   category?: string;
   minRating?: number;
   verifiedOnly?: boolean;
+  intent?: SearchIntent;
 }
 
 export class SearchQuery {

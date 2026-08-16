@@ -4,6 +4,7 @@ import { CurrentUser } from '../../../../common/decorators/current-user.decorato
 import type { AuthPrincipal } from '../../../../common/interfaces/auth-principal.interface.js';
 import { GetSearchHistoryUseCase } from '../../application/use-cases/get-search-history.usecase.js';
 import { SearchCompaniesUseCase } from '../../application/use-cases/search-companies.usecase.js';
+import { translateArabicIntent } from '../../application/services/arabic-intent-translator.js';
 import { SearchQuery } from '../../domain/entities/search-query.js';
 import { SearchHistoryItemDto, SearchHistoryResponseDto } from '../dto/search-history.dto.js';
 import { SearchRequestDto } from '../dto/search-request.dto.js';
@@ -39,10 +40,15 @@ export class SearchController {
 }
 
 function toSearchQuery(dto: SearchRequestDto): SearchQuery {
-  return new SearchQuery(dto.query, {
-    governorate: dto.governorate,
-    category: dto.category,
-    minRating: dto.minRating,
+  const intent = translateArabicIntent(dto.query);
+
+  const filters = {
+    category: dto.category ?? intent.discovery.category,
+    governorate: dto.governorate ?? intent.discovery.location.governorate,
+    minRating: dto.minRating ?? intent.discovery.minRating,
     verifiedOnly: dto.verifiedOnly,
-  });
+    intent,
+  };
+
+  return new SearchQuery(dto.query, filters, undefined, intent.opportunity.maxQuantity);
 }

@@ -111,6 +111,15 @@ enum LeadStatus {
   DISQUALIFIED
 }
 
+enum EnrichmentStatus {
+  PENDING
+  IN_PROGRESS
+  ENRICHED
+  PARTIALLY_ENRICHED
+  ENRICHMENT_FAILED
+  SKIPPED
+}
+
 model User {
   id           String     @id @default(uuid()) @map("id")
   email        String     @unique(map: "uq_users_email") @map("email") @db.VarChar(320)
@@ -1468,7 +1477,10 @@ model SearchResult {
   sourceUrl          String?                        @map("source_url") @db.VarChar(2048)
   ordering           Int                            @default(0) @map("ordering")
   verificationStatus SearchResultVerificationStatus @default(UNKNOWN) @map("verification_status")
-  companyId          String?                        @map("company_id")
+  enrichmentStatus   EnrichmentStatus               @default(PENDING) @map("enrichment_status")
+  enrichmentSnapshot Json?                           @map("enrichment_snapshot")
+  enrichedAt         DateTime?                       @map("enriched_at") @db.Timestamptz
+  companyId          String?                         @map("company_id")
   company            Company?                       @relation(fields: [companyId], references: [id], onDelete: Restrict)
   retrievedAt        DateTime                       @map("retrieved_at") @db.Timestamptz
 
@@ -1486,6 +1498,8 @@ model SearchResult {
   @@index([executionId, ordering], map: "idx_search_results_execution_id_ordering")
   @@index([companyId], map: "idx_search_results_company_id")
   @@index([providerRecordId], map: "idx_search_results_provider_record_id")
+  @@index([enrichmentStatus], map: "idx_search_results_enrichment_status")
+  @@index([executionId, enrichmentStatus], map: "idx_search_results_execution_enrichment")
   @@index([createdById], map: "idx_search_results_created_by_id")
   @@index([updatedById], map: "idx_search_results_updated_by_id")
   @@index([deletedById], map: "idx_search_results_deleted_by_id")

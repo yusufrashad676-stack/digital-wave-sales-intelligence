@@ -160,6 +160,51 @@ export function validateEnv(config: Record<string, unknown>): AppConfig {
     problems.push('SEARCH_GOOGLE_TIMEOUT_MS must be an integer >= 1');
   }
 
+  // Enrichment configuration
+  const enrichmentEnabled = toOptionalString(config.ENRICHMENT_ENABLED);
+  const isEnrichmentEnabled = enrichmentEnabled !== 'false'; // default true
+
+  const enrichmentWebsiteTimeoutMs = toInteger(config.ENRICHMENT_WEBSITE_TIMEOUT_MS, 5000);
+  if (!Number.isInteger(enrichmentWebsiteTimeoutMs) || enrichmentWebsiteTimeoutMs < 1000) {
+    problems.push('ENRICHMENT_WEBSITE_TIMEOUT_MS must be an integer >= 1000');
+  }
+
+  const enrichmentSocialTimeoutMs = toInteger(config.ENRICHMENT_SOCIAL_TIMEOUT_MS, 5000);
+  if (!Number.isInteger(enrichmentSocialTimeoutMs) || enrichmentSocialTimeoutMs < 1000) {
+    problems.push('ENRICHMENT_SOCIAL_TIMEOUT_MS must be an integer >= 1000');
+  }
+
+  const enrichmentVerificationTimeoutMs = toInteger(config.ENRICHMENT_VERIFICATION_TIMEOUT_MS, 3000);
+  if (!Number.isInteger(enrichmentVerificationTimeoutMs) || enrichmentVerificationTimeoutMs < 1000) {
+    problems.push('ENRICHMENT_VERIFICATION_TIMEOUT_MS must be an integer >= 1000');
+  }
+
+  const enrichmentMaxConcurrent = toInteger(config.ENRICHMENT_MAX_CONCURRENT, 5);
+  if (!Number.isInteger(enrichmentMaxConcurrent) || enrichmentMaxConcurrent < 1 || enrichmentMaxConcurrent > 10) {
+    problems.push('ENRICHMENT_MAX_CONCURRENT must be an integer between 1 and 10');
+  }
+
+  const enrichmentMaxResponseBytes = toInteger(config.ENRICHMENT_MAX_RESPONSE_BYTES, 1_048_576);
+  if (
+    !Number.isInteger(enrichmentMaxResponseBytes) ||
+    enrichmentMaxResponseBytes < 1024 ||
+    enrichmentMaxResponseBytes > 10_485_760
+  ) {
+    problems.push('ENRICHMENT_MAX_RESPONSE_BYTES must be an integer between 1024 and 10485760');
+  }
+
+  const enrichmentMaxRedirects = toInteger(config.ENRICHMENT_MAX_REDIRECTS, 3);
+  if (!Number.isInteger(enrichmentMaxRedirects) || enrichmentMaxRedirects < 0 || enrichmentMaxRedirects > 10) {
+    problems.push('ENRICHMENT_MAX_REDIRECTS must be an integer between 0 and 10');
+  }
+
+  const enrichmentUserAgent = toOptionalString(config.ENRICHMENT_USER_AGENT) ?? 'DigitalWave';
+
+  const enrichmentMaxRequestTimeoutMs = toInteger(config.ENRICHMENT_MAX_REQUEST_TIMEOUT_MS, 300_000);
+  if (!Number.isInteger(enrichmentMaxRequestTimeoutMs) || enrichmentMaxRequestTimeoutMs < 10_000) {
+    problems.push('ENRICHMENT_MAX_REQUEST_TIMEOUT_MS must be an integer >= 10000');
+  }
+
   if (problems.length > 0) {
     throw new Error(`Invalid environment configuration:\n- ${problems.join('\n- ')}`);
   }
@@ -184,6 +229,17 @@ export function validateEnv(config: Record<string, unknown>): AppConfig {
       googleMapsApiKey,
       maxResults: searchMaxResults,
       googleTimeoutMs: searchGoogleTimeoutMs,
+    },
+    enrichment: {
+      enabled: isEnrichmentEnabled,
+      websiteTimeoutMs: enrichmentWebsiteTimeoutMs,
+      socialTimeoutMs: enrichmentSocialTimeoutMs,
+      verificationTimeoutMs: enrichmentVerificationTimeoutMs,
+      maxConcurrent: enrichmentMaxConcurrent,
+      maxResponseBytes: enrichmentMaxResponseBytes,
+      maxRedirects: enrichmentMaxRedirects,
+      userAgent: enrichmentUserAgent,
+      maxRequestTimeoutMs: enrichmentMaxRequestTimeoutMs,
     },
   };
 }

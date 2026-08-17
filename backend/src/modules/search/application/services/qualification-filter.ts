@@ -1,6 +1,7 @@
 import type { NormalizedSearchResult } from '../../domain/entities/normalized-search-result.js';
 import type { CriteriaValue, SearchIntentCriteria } from '../../domain/entities/search-intent.js';
 import type { QualifiedResult, ResultQualification } from '../../domain/entities/discovery-run.js';
+import type { EnrichmentSnapshot } from '../../domain/entities/enrichment-snapshot.js';
 
 function observeWebsite(website: string | null): 'PRESENT' | 'ABSENT' {
   return website !== null && website.length > 0 ? 'PRESENT' : 'ABSENT';
@@ -55,4 +56,79 @@ export function qualifyResults(results: NormalizedSearchResult[], criteria: Sear
     sourceUrl: result.sourceUrl,
     qualification: buildQualification(result, criteria),
   }));
+}
+
+function hasVerifiedSocial(snapshot: EnrichmentSnapshot | null): boolean {
+  return snapshot?.social?.profiles?.some((p) => p.verified === true) ?? false;
+}
+
+function hasAnySocial(snapshot: EnrichmentSnapshot | null): boolean {
+  return (snapshot?.social?.profiles?.length ?? 0) > 0;
+}
+
+export function requalifyWithEnrichment(result: QualifiedResult, snapshot: EnrichmentSnapshot | null): QualifiedResult {
+  const socialRequested = result.qualification.social.requested;
+
+  if (socialRequested === 'ANY') {
+    return result;
+  }
+
+  const verified = hasVerifiedSocial(snapshot);
+  const anySocial = hasAnySocial(snapshot);
+
+  if (socialRequested === 'PRESENT') {
+    if (verified) {
+      return {
+        ...result,
+        qualification: {
+          ...result.qualification,
+          social: { requested: 'PRESENT', observed: 'PRESENT', source: 'enrichment' },
+          status: 'QUALIFIED',
+          reason: 'Social presence verified via enrichment',
+        },
+      };
+    }
+    if (anySocial) {
+      return {
+        ...result,
+        qualification: {
+          ...result.qualification,
+          social: { requested: 'PRESENT', observed: 'PRESENT', source: 'enrichment' },
+          status: 'UNVERIFIED_SOCIAL',
+          reason: 'Social profiles found but not verified',
+        },
+      };
+    }
+    return {
+      ...result,
+      qualification: {
+        ...result.qualification,
+        social: { requested: 'PRESENT', observed: 'ABSENT', source: 'enrichment' },
+        status: 'REJECTED',
+        reason: 'Social presence required but none found via enrichment',
+      },
+    };
+  }
+
+  // socialRequested === 'ABSENT'
+  if (anySocial) {
+    return {
+      ...result,
+      qualification: {
+        ...result.qualification,
+        social: { requested: 'ABSENT', observed: 'PRESENT', source: 'enrichment' },
+        status: 'REJECTED',
+        reason: 'Social absence required but profiles found via enrichment',
+      },
+    };
+  }
+  return {
+    ...result,
+    qualification: {
+      ...result.qualification,
+      social: { requested: 'ABSENT', observed: 'ABSENT', source: 'enrichment' },
+      status: 'QUALIFIED',
+      reason: 'No social profiles found as required',
+    },
+  };
 }

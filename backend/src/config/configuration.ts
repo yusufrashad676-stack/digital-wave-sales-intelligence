@@ -38,4 +38,15 @@ export type AppConfig = {
     maxResults: number;
     googleTimeoutMs: number;
   };
+  enrichment: {
+    enabled: boolean;
+    websiteTimeoutMs: number;
+    socialTimeoutMs: number;
+    verificationTimeoutMs: number;
+    maxConcurrent: number;
+    maxResponseBytes: number;
+    maxRedirects: number;
+    userAgent: string;
+    maxRequestTimeoutMs: number;
+  };
 };

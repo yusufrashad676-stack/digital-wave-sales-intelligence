@@ -7,7 +7,7 @@ import { RunRequestDto } from '../dto/run-request.dto.js';
 import { RunResponseDto } from '../dto/run-result.dto.js';
 
 @ApiTags('runs')
-@Controller('runs')
+@Controller('search/runs')
 export class RunController {
   constructor(private readonly runDiscoveryUseCase: RunDiscoveryUseCase) {}
 

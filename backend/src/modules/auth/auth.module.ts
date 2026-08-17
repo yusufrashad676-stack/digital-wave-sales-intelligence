@@ -48,6 +48,6 @@ import { RolesGuard } from './presentation/guards/roles.guard.js';
     AuthGuard,
     RolesGuard,
   ],
-  exports: [AuthGuard, RolesGuard, TokenPort],
+  exports: [AuthGuard, RolesGuard, TokenPort, AuditPort],
 })
 export class AuthModule {}

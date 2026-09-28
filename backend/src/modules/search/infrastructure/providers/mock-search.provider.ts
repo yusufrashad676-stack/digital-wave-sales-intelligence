@@ -15,6 +15,8 @@ interface SampleBusiness {
   rating: number;
   ratingCount: number;
   verificationStatus: 'VERIFIED' | 'UNVERIFIED';
+  latitude: number;
+  longitude: number;
 }
 
 const SAMPLE_BUSINESSES: SampleBusiness[] = [
@@ -27,6 +29,8 @@ const SAMPLE_BUSINESSES: SampleBusiness[] = [
     address: 'التجمع الخامس، شارع التسعين، القاهرة الجديدة',
     phone: '+20 100 123 4567',
     website: 'https://www.example-dental-ahmed.com',
+    latitude: 30.0166,
+    longitude: 31.4968,
     rating: 4.6,
     ratingCount: 128,
     verificationStatus: 'VERIFIED',
@@ -40,6 +44,8 @@ const SAMPLE_BUSINESSES: SampleBusiness[] = [
     address: 'مصر الجديدة، شارع الميرغني، القاهرة',
     phone: '+20 2 2690 5544',
     website: 'https://future-clinic.example.com',
+    latitude: 30.0497,
+    longitude: 31.2422,
     rating: 3.9,
     ratingCount: 84,
     verificationStatus: 'UNVERIFIED',
@@ -53,6 +59,8 @@ const SAMPLE_BUSINESSES: SampleBusiness[] = [
     address: 'مدينة نصر، شارع عباس العقاد، القاهرة',
     phone: '+20 100 555 8899',
     website: 'https://hope-dental.example.com',
+    latitude: 30.0561,
+    longitude: 31.3298,
     rating: 4.4,
     ratingCount: 201,
     verificationStatus: 'VERIFIED',
@@ -66,6 +74,8 @@ const SAMPLE_BUSINESSES: SampleBusiness[] = [
     address: 'الزمالك، شارع 26 يوليو، القاهرة',
     phone: '+20 2 2736 1111',
     website: 'https://nile-children.example.com',
+    latitude: 30.0585,
+    longitude: 31.2186,
     rating: 4.2,
     ratingCount: 342,
     verificationStatus: 'UNVERIFIED',
@@ -79,6 +89,8 @@ const SAMPLE_BUSINESSES: SampleBusiness[] = [
     address: 'سموحة، شارع جمال عبد الناصر، الإسكندرية',
     phone: '+20 3 424 7788',
     website: 'https://alex-medical.example.com',
+    latitude: 31.2001,
+    longitude: 29.9187,
     rating: 4.1,
     ratingCount: 176,
     verificationStatus: 'UNVERIFIED',
@@ -92,6 +104,8 @@ const SAMPLE_BUSINESSES: SampleBusiness[] = [
     address: 'محطة الرمل، شارع سعد زغلول، الإسكندرية',
     phone: '+20 3 486 2233',
     website: 'https://delta-eyes.example.com',
+    latitude: 31.2,
+    longitude: 29.893,
     rating: 4.5,
     ratingCount: 95,
     verificationStatus: 'VERIFIED',
@@ -105,6 +119,8 @@ const SAMPLE_BUSINESSES: SampleBusiness[] = [
     address: 'المعادي، شارع 9، القاهرة',
     phone: '+20 2 2515 7788',
     website: 'https://aldhawqah.example.com',
+    latitude: 29.9636,
+    longitude: 31.2522,
     rating: 3.8,
     ratingCount: 512,
     verificationStatus: 'UNVERIFIED',
@@ -118,6 +134,8 @@ const SAMPLE_BUSINESSES: SampleBusiness[] = [
     address: 'الغردقة، شارع المشاية، البحر الأحمر',
     phone: '+20 65 345 6677',
     website: 'https://redsea-seafood.example.com',
+    latitude: 27.2574,
+    longitude: 33.8116,
     rating: 4.7,
     ratingCount: 689,
     verificationStatus: 'VERIFIED',
@@ -131,6 +149,8 @@ const SAMPLE_BUSINESSES: SampleBusiness[] = [
     address: 'سيدي بشر، طريق الجيش، الإسكندرية',
     phone: '+20 3 540 2233',
     website: 'https://abuqir-seafood.example.com',
+    latitude: 31.2333,
+    longitude: 29.9333,
     rating: 4.3,
     ratingCount: 431,
     verificationStatus: 'UNVERIFIED',
@@ -233,6 +253,8 @@ function toProviderResult(business: SampleBusiness): ProviderSearchResult {
     ratingCount: business.ratingCount,
     verificationStatus: business.verificationStatus,
     sourceUrl: `https://maps.example.com/place/${business.providerRecordId}`,
+    latitude: business.latitude,
+    longitude: business.longitude,
   };
 }
 

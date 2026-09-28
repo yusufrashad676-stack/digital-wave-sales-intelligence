@@ -8,7 +8,7 @@ import { GooglePlacesProvider } from './google-places.provider.js';
 
 const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
 const FIELD_MASK =
-  'places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.websiteUri,' +
+  'places.id,places.displayName,places.formattedAddress,places.location,places.nationalPhoneNumber,places.websiteUri,' +
   'places.rating,places.userRatingCount,places.googleMapsUri,places.types';
 
 const OPTIONS = { maxResults: 20, timeoutMs: 5000 };

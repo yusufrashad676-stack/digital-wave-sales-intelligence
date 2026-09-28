@@ -2,12 +2,15 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppConfig } from '../../config/configuration.js';
 import { EnrichmentEngine } from './application/services/enrichment-engine.js';
+import { CanonicalPromotionService } from './application/services/canonical-promotion.service.js';
 import { EnrichSearchResultsUseCase } from './application/use-cases/enrich-search-results.usecase.js';
 import { GetExecutionUseCase } from './application/use-cases/get-execution.usecase.js';
 import { GetExecutionResultsUseCase } from './application/use-cases/get-execution-results.usecase.js';
 import { GetSearchHistoryUseCase } from './application/use-cases/get-search-history.usecase.js';
 import { RunDiscoveryUseCase } from './application/use-cases/run-discovery.usecase.js';
 import { SearchCompaniesUseCase } from './application/use-cases/search-companies.usecase.js';
+import { ENRICHMENT_ENABLED } from './domain/tokens.js';
+import { CanonicalPromotionRepository } from './domain/ports/canonical-promotion.repository.js';
 import { EnrichmentRepository } from './domain/ports/enrichment.repository.js';
 import { ImportSourceRepository } from './domain/ports/import-source.repository.js';
 import { SearchExecutionRepository } from './domain/ports/search-execution.repository.js';
@@ -17,6 +20,7 @@ import { SearchProviderPort } from './domain/ports/search-provider.port.js';
 import { SocialDiscoveryPort } from './domain/ports/social-discovery.port.js';
 import { SocialVerificationPort } from './domain/ports/social-verification.port.js';
 import { WebsiteEnrichmentPort } from './domain/ports/website-enrichment.port.js';
+import { PrismaCanonicalPromotionRepository } from './infrastructure/persistence/prisma-canonical-promotion.repository.js';
 import { PrismaEnrichmentRepository } from './infrastructure/persistence/prisma-enrichment.repository.js';
 import { PrismaImportSourceRepository } from './infrastructure/persistence/prisma-import-source.repository.js';
 import { PrismaSearchExecutionRepository } from './infrastructure/persistence/prisma-search-execution.repository.js';
@@ -63,12 +67,19 @@ import { SearchController } from './presentation/controllers/search.controller.j
       useFactory: (config: ConfigService) =>
         createSocialVerificationProvider(config.getOrThrow<AppConfig['enrichment']>('enrichment')),
     },
+    {
+      provide: ENRICHMENT_ENABLED,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => config.getOrThrow<AppConfig['enrichment']>('enrichment').enabled,
+    },
     { provide: ImportSourceRepository, useClass: PrismaImportSourceRepository },
     { provide: SearchJobRepository, useClass: PrismaSearchJobRepository },
     { provide: SearchExecutionRepository, useClass: PrismaSearchExecutionRepository },
     { provide: SearchPersistenceRepository, useClass: PrismaSearchPersistenceRepository },
     { provide: EnrichmentRepository, useClass: PrismaEnrichmentRepository },
+    { provide: CanonicalPromotionRepository, useClass: PrismaCanonicalPromotionRepository },
     EnrichmentEngine,
+    CanonicalPromotionService,
     SearchCompaniesUseCase,
     RunDiscoveryUseCase,
     GetSearchHistoryUseCase,
@@ -76,6 +87,6 @@ import { SearchController } from './presentation/controllers/search.controller.j
     GetExecutionUseCase,
     GetExecutionResultsUseCase,
   ],
-  exports: [EnrichmentEngine],
+  exports: [EnrichmentEngine, ENRICHMENT_ENABLED],
 })
 export class SearchModule {}

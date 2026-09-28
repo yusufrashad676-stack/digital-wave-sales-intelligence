@@ -129,6 +129,13 @@ export class HttpWebsiteEnrichmentProvider implements WebsiteEnrichmentPort {
           description: null,
           techHints: [],
           socialLinks: [],
+          emails: [],
+          reachable: true,
+          https: true,
+          contactPageUrl: null,
+          hasContactForm: false,
+          bookingPageUrl: null,
+          whatsappUrl: null,
           fetchedAt: new Date().toISOString(),
           provider: PROVIDER_ID,
         },
@@ -140,6 +147,11 @@ export class HttpWebsiteEnrichmentProvider implements WebsiteEnrichmentPort {
     const description = extractDescription(html);
     const socialLinks = extractSocialLinks(html);
     const techHints = extractTechHints(html);
+    const emails = extractEmails(html);
+    const contactPageUrl = extractContactPageUrl(html);
+    const bookingPageUrl = extractBookingPageUrl(html);
+    const whatsappUrl = extractWhatsappUrl(html);
+    const hasContactForm = detectContactForm(html);
 
     return {
       domain,
@@ -148,6 +160,13 @@ export class HttpWebsiteEnrichmentProvider implements WebsiteEnrichmentPort {
         description,
         techHints,
         socialLinks,
+        emails,
+        reachable: true,
+        https: true,
+        contactPageUrl,
+        hasContactForm,
+        bookingPageUrl,
+        whatsappUrl,
         fetchedAt: new Date().toISOString(),
         provider: PROVIDER_ID,
       },
@@ -155,7 +174,7 @@ export class HttpWebsiteEnrichmentProvider implements WebsiteEnrichmentPort {
   }
 }
 
-function extractTitle(html: string): string | null {
+export function extractTitle(html: string): string | null {
   // Try <title> tag
   const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
   if (titleMatch?.[1]) {
@@ -171,7 +190,7 @@ function extractTitle(html: string): string | null {
   return null;
 }
 
-function extractDescription(html: string): string | null {
+export function extractDescription(html: string): string | null {
   // Try meta description
   const metaMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
   if (metaMatch?.[1]) {
@@ -187,7 +206,132 @@ function extractDescription(html: string): string | null {
   return null;
 }
 
-function extractSocialLinks(html: string): string[] {
+const MAX_EMAILS = 10;
+
+const EMAIL_IN_TEXT_PATTERN =
+  /[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+/g;
+
+/**
+ * Extract observed email addresses from first-party page content: mailto: links
+ * and bare email-pattern matches. Bounded, deduplicated, lowercase. This is
+ * "observed" evidence only — nothing here is guessed or inferred.
+ */
+export function extractEmails(html: string): string[] {
+  const emails = new Set<string>();
+
+  const visit = (candidate: string): void => {
+    const email = candidate.trim().toLowerCase();
+    if (email.length === 0 || /\.\./.test(email)) {
+      return;
+    }
+    const fresh = new RegExp(EMAIL_IN_TEXT_PATTERN.source, '');
+    if (fresh.test(email)) {
+      emails.add(email);
+    }
+  };
+
+  const mailtoPattern = /mailto:([^"'<>\s>]+)/gi;
+  let mailtoMatch: RegExpExecArray | null;
+  while ((mailtoMatch = mailtoPattern.exec(html)) !== null && emails.size < MAX_EMAILS) {
+    visit(mailtoMatch[1]?.split('?')[0] ?? '');
+  }
+
+  let textMatch: RegExpExecArray | null;
+  while ((textMatch = EMAIL_IN_TEXT_PATTERN.exec(html)) !== null && emails.size < MAX_EMAILS) {
+    visit(textMatch[0]);
+  }
+
+  return Array.from(emails).slice(0, MAX_EMAILS);
+}
+
+const CONTACT_HREF_PATTERNS = [
+  /^\/(?:contact|contact-us|about|support|reach-us)[^"'<>\s]*\/?$/i,
+  /^\/(?:pages\/)?contact[^"'<>\s]*$/i,
+];
+const CONTACT_TEXT_PATTERNS = [/contact(?: us)?\b/i];
+
+export function extractContactPageUrl(html: string): string | null {
+  return extractMatchingPageUrl(html, CONTACT_HREF_PATTERNS, CONTACT_TEXT_PATTERNS);
+}
+
+const BOOKING_HREF_PATTERNS = [
+  /^\/(?:book|booking|reservation|reserve|appointment|schedule|make-an-appointment|book-an-appointment)[^"'<>\s]*$/i,
+];
+const BOOKING_TEXT_PATTERNS = [
+  /book(?:\s+a)?\s+(?:now|an appointment|an\s?appointment|an online appointment)?/i,
+  /reservations?\b/i,
+];
+
+export function extractBookingPageUrl(html: string): string | null {
+  return extractMatchingPageUrl(html, BOOKING_HREF_PATTERNS, BOOKING_TEXT_PATTERNS);
+}
+
+export function extractWhatsappUrl(html: string): string | null {
+  const hrefPattern = /href=["']([^"']+)["']/gi;
+  let match: RegExpExecArray | null;
+  while ((match = hrefPattern.exec(html)) !== null) {
+    const url = match[1];
+    if (url === undefined) continue;
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      continue;
+    }
+    const lower = parsed.origin.toLowerCase();
+    if (lower === 'https://wa.me' || lower === 'https://api.whatsapp.com') {
+      return parsed.toString();
+    }
+  }
+  return null;
+}
+
+export function extractMatchingPageUrl(html: string, hrefPatterns: RegExp[], textPatterns: RegExp[]): string | null {
+  const hrefPattern = /href=["']([^"']+)["']/gi;
+  let match: RegExpExecArray | null;
+  while ((match = hrefPattern.exec(html)) !== null) {
+    const href = match[1];
+    if (href === undefined) continue;
+    for (const pattern of hrefPatterns) {
+      if (pattern.test(href)) {
+        return href;
+      }
+    }
+  }
+
+  // Fall back to anchor text (e.g. "Contact us", "Book now").
+  const anchorPattern = /<a[^>]*href=["']([^"']+)["'][^>]*>([^<]*)<\/a>/gi;
+  while ((match = anchorPattern.exec(html)) !== null) {
+    const href = match[1];
+    const label = match[2];
+    if (href === undefined || label === undefined) continue;
+    for (const textPattern of textPatterns) {
+      if (textPattern.test(label)) {
+        return href;
+      }
+    }
+  }
+  return null;
+}
+
+export function detectContactForm(html: string): boolean {
+  const formPattern = /<form\b[^>]*>/gi;
+  let formMatch: RegExpExecArray | null;
+  while ((formMatch = formPattern.exec(html)) !== null) {
+    const formTag = formMatch[0];
+    // Only treat a form as a contact form when it clearly collects contact info.
+    if (
+      /input[^>]*type=["']email["']/i.test(html.slice(formMatch.index, formMatch.index + 2000)) ||
+      /<textarea\b/i.test(html.slice(formMatch.index, formMatch.index + 2000)) ||
+      /name=["'](email|phone|message|captcha)["']/i.test(formTag)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function extractSocialLinks(html: string): string[] {
   const links = new Set<string>();
 
   // Match href attributes pointing to social domains
@@ -215,7 +359,7 @@ function extractSocialLinks(html: string): string[] {
   return Array.from(links);
 }
 
-function extractTechHints(html: string): string[] {
+export function extractTechHints(html: string): string[] {
   const hints = new Set<string>();
 
   for (const { pattern, hint } of TECH_HINT_PATTERNS) {

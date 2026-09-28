@@ -12,6 +12,13 @@ export interface WebsiteEnrichmentData {
   socialLinks: string[];
   fetchedAt: string;
   provider: string;
+  emails?: string[];
+  reachable?: boolean;
+  https?: boolean;
+  contactPageUrl?: string | null;
+  hasContactForm?: boolean;
+  bookingPageUrl?: string | null;
+  whatsappUrl?: string | null;
 }
 
 export interface SocialProfileData {

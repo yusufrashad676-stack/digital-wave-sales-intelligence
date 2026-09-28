@@ -698,13 +698,16 @@ model Address {
 }
 
 model Website {
-  id              String  @id @default(uuid()) @map("id")
-  domain          String  @map("domain") @db.VarChar(255)
-  url             String? @map("url") @db.VarChar(2048)
-  title           String? @map("title") @db.VarChar(500)
-  description     String? @map("description") @db.VarChar(2000)
-  techHints       Json?   @map("tech_hints")
-  importSourceRef String? @map("import_source_ref") @db.VarChar(255)
+  id              String    @id @default(uuid()) @map("id")
+  domain          String    @map("domain") @db.VarChar(255)
+  url             String?   @map("url") @db.VarChar(2048)
+  title           String?   @map("title") @db.VarChar(500)
+  description     String?   @map("description") @db.VarChar(2000)
+  techHints       Json?     @map("tech_hints")
+  importSourceRef String?   @map("import_source_ref") @db.VarChar(255)
+  evidenceSource  String?   @map("evidence_source") @db.VarChar(255)
+  evidenceUrl     String?   @map("evidence_url") @db.VarChar(2048)
+  observedAt      DateTime? @map("observed_at") @db.Timestamptz
 
   createdById String?   @map("created_by_id")
   createdBy   User?     @relation("WebsiteCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
@@ -727,15 +730,18 @@ model Website {
 }
 
 model SocialProfile {
-  id                String         @id @default(uuid()) @map("id")
-  platformId        String         @map("platform_id")
+  id                String    @id @default(uuid()) @map("id")
+  platformId        String    @map("platform_id")
   platform          SocialPlatform @relation(fields: [platformId], references: [id], onDelete: Restrict)
-  handle            String?        @map("handle") @db.VarChar(255)
-  profileUrl        String?        @map("profile_url") @db.VarChar(2048)
-  platformProfileId String?        @map("platform_profile_id") @db.VarChar(255)
-  displayName       String?        @map("display_name") @db.VarChar(255)
-  activitySnapshot  Json?          @map("activity_snapshot")
-  importSourceRef   String?        @map("import_source_ref") @db.VarChar(255)
+  handle            String?   @map("handle") @db.VarChar(255)
+  profileUrl        String?   @map("profile_url") @db.VarChar(2048)
+  platformProfileId String?   @map("platform_profile_id") @db.VarChar(255)
+  displayName       String?   @map("display_name") @db.VarChar(255)
+  activitySnapshot  Json?     @map("activity_snapshot")
+  importSourceRef   String?   @map("import_source_ref") @db.VarChar(255)
+  evidenceSource    String?   @map("evidence_source") @db.VarChar(255)
+  evidenceUrl       String?   @map("evidence_url") @db.VarChar(2048)
+  observedAt        DateTime? @map("observed_at") @db.Timestamptz
 
   createdById String?   @map("created_by_id")
   createdBy   User?     @relation("SocialProfileCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
@@ -766,6 +772,9 @@ model ContactMethod {
   value           String            @map("value") @db.VarChar(500)
   countryCode     String?           @map("country_code") @db.VarChar(5)
   importSourceRef String?           @map("import_source_ref") @db.VarChar(255)
+  evidenceSource  String?           @map("evidence_source") @db.VarChar(255)
+  evidenceUrl     String?           @map("evidence_url") @db.VarChar(2048)
+  observedAt      DateTime?         @map("observed_at") @db.Timestamptz
 
   createdById String?   @map("created_by_id")
   createdBy   User?     @relation("ContactMethodCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)

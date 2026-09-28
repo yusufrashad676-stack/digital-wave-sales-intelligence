@@ -7,8 +7,13 @@ export interface EnrichmentResultRow {
   executionId: string;
   providerId: string;
   providerRecordId: string;
+  companyId: string | null;
   companyName: string;
+  phone: string | null;
+  email: string | null;
   websiteDomain: string | null;
+  sourceUrl: string | null;
+  retrievedAt: Date;
   enrichmentStatus: string;
   enrichmentSnapshot: EnrichmentSnapshot | null;
 }

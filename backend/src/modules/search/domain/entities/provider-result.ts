@@ -12,6 +12,8 @@ export interface ProviderSearchResult {
   ratingCount?: number;
   verificationStatus?: ProviderVerificationStatus;
   sourceUrl?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface ProviderResultSet {

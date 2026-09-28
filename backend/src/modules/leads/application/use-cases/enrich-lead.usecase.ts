@@ -1,9 +1,12 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { ConflictException } from '../../../../common/exceptions/conflict.exception.js';
+import { BusinessRuleException } from '../../../../common/exceptions/business-rule.exception.js';
+import { ErrorCode } from '../../../../common/exceptions/error-codes.js';
 import { NotFoundException } from '../../../../common/exceptions/not-found.exception.js';
 import type { LeadSnapshot } from '../../domain/entities/lead.entity.js';
 import { LeadRepository } from '../../domain/ports/lead.repository.js';
 import { EnrichmentEngine } from '../../../search/application/services/enrichment-engine.js';
+import { ENRICHMENT_ENABLED } from '../../../search/domain/tokens.js';
 
 export const STALE_IN_PROGRESS_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -24,9 +27,16 @@ export class EnrichLeadUseCase {
   constructor(
     @Inject(LeadRepository) private readonly leadRepo: LeadRepository,
     private readonly engine: EnrichmentEngine,
+    @Optional() @Inject(ENRICHMENT_ENABLED) private readonly enrichmentEnabled: boolean = true,
   ) {}
 
   async enrich(input: EnrichLeadInput): Promise<EnrichLeadResult> {
+    if (!this.enrichmentEnabled) {
+      throw new BusinessRuleException(
+        ErrorCode.ENRICHMENT_NOT_ALLOWED,
+        'Enrichment is disabled in this environment (ENRICHMENT_ENABLED=false)',
+      );
+    }
     const startedAt = new Date();
     const { leadId, userId, skipWebsite, skipSocial } = input;
 

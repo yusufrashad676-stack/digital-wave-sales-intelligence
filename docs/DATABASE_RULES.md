@@ -176,6 +176,9 @@ Prisma cannot represent them. Keep this registry in sync with the live database:
 | 9 | `branch_contact_methods` | `uq_branch_contact_methods_method_active` | `UNIQUE (contact_method_id) WHERE deleted_at IS NULL` | ADR-006 (single owner) |
 | 10 | `leads` | `uq_leads_user_provider_active` | `UNIQUE (user_id, provider_record_id) WHERE deleted_at IS NULL` | Saved-lead idempotency |
 | 11 | `companies` | `uq_companies_provider_identity_active` | `UNIQUE (import_source_id, provider_record_id) WHERE deleted_at IS NULL` | R2 — canonical (provider identity) for discovery companies |
+| 12 | `websites` | `uq_websites_domain_active` | `UNIQUE (domain) WHERE deleted_at IS NULL` | R3 — canonical Website identity for observed domains |
+| 13 | `contact_methods` | `uq_contact_methods_type_value_active` | `UNIQUE (type_id, value) WHERE deleted_at IS NULL` | R3 — canonical ContactMethod identity for observed phone/email |
+| 14 | `social_profiles` | `uq_social_profiles_platform_url_active` | `UNIQUE (platform_id, profile_url) WHERE deleted_at IS NULL` | R3 — canonical SocialProfile identity for observed profile URLs |
 
 Future additions to this registry: expression/prefix indexes (name matching),
 full-text (tsvector/trigram), and spatial indexes (ADR-008) when those features

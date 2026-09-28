@@ -15,6 +15,7 @@ const FIELD_MASK = [
   'places.id',
   'places.displayName',
   'places.formattedAddress',
+  'places.location',
   'places.nationalPhoneNumber',
   'places.websiteUri',
   'places.rating',
@@ -71,6 +72,7 @@ interface GooglePlace {
   id?: string;
   displayName?: { text?: string; languageCode?: string };
   formattedAddress?: string;
+  location?: { latitude?: number; longitude?: number };
   nationalPhoneNumber?: string;
   websiteUri?: string;
   rating?: number;
@@ -235,6 +237,8 @@ function toProviderResult(place: GooglePlace): ProviderSearchResult {
     // verificationStatus is intentionally absent: Google data is not an
     // internal verification record, so the existing normalization yields UNKNOWN.
     sourceUrl: place.googleMapsUri,
+    latitude: place.location?.latitude,
+    longitude: place.location?.longitude,
   };
 }
 

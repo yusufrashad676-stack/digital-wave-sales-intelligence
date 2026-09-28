@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ErrorCode } from '../../../../common/exceptions/error-codes.js';
 import { NotFoundException } from '../../../../common/exceptions/not-found.exception.js';
 import { BusinessRuleException } from '../../../../common/exceptions/business-rule.exception.js';
@@ -7,6 +7,8 @@ import type { AuthPrincipal } from '../../../../common/interfaces/auth-principal
 import { EnrichmentRepository } from '../../domain/ports/enrichment.repository.js';
 import type { EnrichmentResultRow } from '../../domain/ports/enrichment.repository.js';
 import { EnrichmentEngine, type EnrichmentTarget } from '../services/enrichment-engine.js';
+import { CanonicalPromotionService } from '../services/canonical-promotion.service.js';
+import { ENRICHMENT_ENABLED } from '../../domain/tokens.js';
 
 const BATCH_DELAY_MS = 100;
 
@@ -44,9 +46,17 @@ export class EnrichSearchResultsUseCase {
   constructor(
     @Inject(EnrichmentRepository) private readonly enrichmentRepo: EnrichmentRepository,
     private readonly engine: EnrichmentEngine,
+    @Optional() private readonly promotionService?: CanonicalPromotionService,
+    @Optional() @Inject(ENRICHMENT_ENABLED) private readonly enrichmentEnabled: boolean = true,
   ) {}
 
   async execute(input: EnrichSearchResultsInput): Promise<EnrichmentRunResult> {
+    if (!this.enrichmentEnabled) {
+      throw new BusinessRuleException(
+        ErrorCode.ENRICHMENT_NOT_ALLOWED,
+        'Enrichment is disabled in this environment (ENRICHMENT_ENABLED=false)',
+      );
+    }
     const startedAt = new Date();
     const { executionId, principal, options } = input;
     const skipWebsite = options?.skipWebsite ?? false;
@@ -191,6 +201,19 @@ export class EnrichSearchResultsUseCase {
 
     // Persist
     await this.enrichmentRepo.updateEnrichmentStatus(result.id, engineResult.status, engineResult.snapshot);
+
+    // Promote OBSERVED evidence into canonical Company facts. Optional: a
+    // promotion failure must never corrupt or undo the enrichment that already
+    // succeeded (the status/snapshot above was already persisted).
+    if (this.promotionService !== undefined) {
+      try {
+        await this.promotionService.promoteFromEnrichment(result, engineResult.snapshot);
+      } catch (error) {
+        this.logger.warn(
+          `Canonical promotion failed for result ${result.id}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
 
     return {
       status: engineResult.status,

@@ -15,5 +15,7 @@ export class NormalizedSearchResult {
     public readonly sourceUrl: string | null,
     public readonly retrievedAt: Date,
     public readonly area: string | null = null,
+    public readonly latitude: number | null = null,
+    public readonly longitude: number | null = null,
   ) {}
 }

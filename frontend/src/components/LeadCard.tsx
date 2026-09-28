@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import type { LeadStatus, SavedLead } from '../api/leads';
+import type { EnrichmentView } from '../api/executions';
 import type { SearchResult } from '../api/search';
 import {
   CATEGORY_LABELS,
+  ENRICHMENT_STATUS_LABELS,
   LEAD_STATUS_LABELS,
   LEAD_STATUSES,
   PROVIDER_LABELS,
@@ -12,6 +14,7 @@ import { IconBookmark, IconGlobe, IconNote, IconPhone, IconPin, IconStar, IconTr
 
 interface Props {
   result: SearchResult;
+  enrichment?: EnrichmentView | null;
   savedLead?: SavedLead | null;
   onSave?: () => Promise<void>;
   onOpen: () => void;
@@ -45,7 +48,15 @@ function statusClass(status: string): string {
   }
 }
 
-export default function LeadCard({ result, savedLead = null, onSave, onOpen, onStatusChange, onRemove }: Props) {
+export default function LeadCard({
+  result,
+  enrichment = null,
+  savedLead = null,
+  onSave,
+  onOpen,
+  onStatusChange,
+  onRemove,
+}: Props) {
   const [saving, setSaving] = useState(false);
   const [savingError, setSavingError] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
@@ -91,6 +102,12 @@ export default function LeadCard({ result, savedLead = null, onSave, onOpen, onS
             </span>
             {savedLead !== null && (
               <span className={statusClass(savedLead.status)}>{LEAD_STATUS_LABELS[savedLead.status]}</span>
+            )}
+            {enrichment !== null && enrichment !== undefined && (
+              <span className={`badge badge-enrichment badge-enrichment-${enrichment.status.toLowerCase()}`}>
+                <IconGlobe width={10} height={10} />
+                {ENRICHMENT_STATUS_LABELS[enrichment.status] ?? enrichment.status}
+              </span>
             )}
           </div>
         </div>

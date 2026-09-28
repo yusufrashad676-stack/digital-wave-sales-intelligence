@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { LeadStatus, SavedLead } from '../api/leads';
 import { savedLeadToResult } from '../api/leads';
+import { enrichLead } from '../api/enrichment';
 import { LEAD_STATUSES, LEAD_STATUS_LABELS } from '../api/search-options';
 import LeadCard from './LeadCard';
 
@@ -12,6 +13,7 @@ interface Props {
   onOpen: (lead: SavedLead) => void;
   onStatusChange: (id: string, status: LeadStatus) => void;
   onRemove: (id: string) => Promise<void>;
+  onEnriched: (id: string, enrichment: SavedLead['enrichment']) => void;
   onStartSearch: () => void;
 }
 
@@ -25,11 +27,29 @@ export default function SavedLeadsView({
   onOpen,
   onStatusChange,
   onRemove,
+  onEnriched,
   onStartSearch,
 }: Props) {
   const [filter, setFilter] = useState<string>(ALL);
+  const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set());
 
   const filtered = filter === ALL ? leads : leads.filter((lead) => lead.status === filter);
+
+  async function handleEnrich(leadId: string) {
+    setEnrichingIds((prev) => new Set(prev).add(leadId));
+    try {
+      const response = await enrichLead(leadId);
+      onEnriched(leadId, response.enrichment);
+    } catch {
+      // enrichment error is silent in list view
+    } finally {
+      setEnrichingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(leadId);
+        return next;
+      });
+    }
+  }
 
   return (
     <div className="view">
@@ -100,14 +120,24 @@ export default function SavedLeadsView({
           </div>
           <div className="lead-grid">
             {filtered.map((lead) => (
-              <LeadCard
-                key={lead.id}
-                result={savedLeadToResult(lead)}
-                savedLead={lead}
-                onOpen={() => onOpen(lead)}
-                onStatusChange={(status) => void onStatusChange(lead.id, status)}
-                onRemove={() => onRemove(lead.id)}
-              />
+              <div key={lead.id} className="lead-card-wrap">
+                <LeadCard
+                  result={savedLeadToResult(lead)}
+                  enrichment={lead.enrichment}
+                  savedLead={lead}
+                  onOpen={() => onOpen(lead)}
+                  onStatusChange={(status) => void onStatusChange(lead.id, status)}
+                  onRemove={() => onRemove(lead.id)}
+                />
+                <button
+                  type="button"
+                  className="link-btn enrich-lead-btn"
+                  disabled={enrichingIds.has(lead.id)}
+                  onClick={() => void handleEnrich(lead.id)}
+                >
+                  {enrichingIds.has(lead.id) ? 'جارٍ الإثراء…' : 'إثراء'}
+                </button>
+              </div>
             ))}
           </div>
         </section>

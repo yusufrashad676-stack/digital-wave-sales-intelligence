@@ -5,6 +5,9 @@ export class SearchHistoryItemDto {
   @ApiProperty({ example: '24f1c4a2-...' })
   id!: string;
 
+  @ApiPropertyOptional({ nullable: true, example: 'execution-uuid' })
+  executionId!: string | null;
+
   @ApiProperty({ example: 'عيادات في التجمع' })
   query!: string;
 
@@ -26,6 +29,7 @@ export class SearchHistoryItemDto {
   static from(item: SearchJobHistoryItem): SearchHistoryItemDto {
     const dto = new SearchHistoryItemDto();
     dto.id = item.id;
+    dto.executionId = item.executionId;
     dto.query = item.query;
     dto.filters = item.filters as unknown as Record<string, unknown>;
     dto.status = item.status;

@@ -79,4 +79,38 @@ describe('SaveLeadDto', () => {
       BadRequestException,
     );
   });
+
+  it('accepts an optional UUID searchResultId', async () => {
+    const errors = await validate(dto({ searchResultId: '22d83e8c-0b2d-41bc-a949-8c05dc94fa53' }));
+    assert.deepEqual(errors, []);
+  });
+
+  it('rejects a non-UUID searchResultId', async () => {
+    const errors = await validate(dto({ searchResultId: 'not-a-uuid' }));
+    assert.ok(errors.some((error) => error.property === 'searchResultId'));
+  });
+
+  it('rejects client-supplied enrichment fields through the global pipe', async () => {
+    await assert.rejects(
+      () => pipe.transform({ ...BASE, enrichment_status: 'ENRICHED' }, { metatype: SaveLeadDto, type: 'body' }),
+      BadRequestException,
+    );
+    await assert.rejects(
+      () => pipe.transform({ ...BASE, enrichmentStatus: 'ENRICHED' }, { metatype: SaveLeadDto, type: 'body' }),
+      BadRequestException,
+    );
+    await assert.rejects(
+      () =>
+        pipe.transform(
+          { ...BASE, enrichmentSnapshot: { website: { title: 'x' } } },
+          { metatype: SaveLeadDto, type: 'body' },
+        ),
+      BadRequestException,
+    );
+    await assert.rejects(
+      () =>
+        pipe.transform({ ...BASE, enrichedAt: '2026-08-17T16:50:40.000Z' }, { metatype: SaveLeadDto, type: 'body' }),
+      BadRequestException,
+    );
+  });
 });

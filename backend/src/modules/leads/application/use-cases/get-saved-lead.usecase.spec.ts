@@ -12,6 +12,26 @@ describe('GetSavedLeadUseCase', () => {
     const repository = { findOwned: async () => leadSnapshot() } as unknown as LeadRepository;
     const result = await new GetSavedLeadUseCase(repository).get('user-1', 'lead-1');
     assert.equal(result.id, 'lead-1');
+    assert.equal(result.enrichmentStatus, 'PENDING');
+    assert.equal(result.enrichmentSnapshot, null);
+    assert.equal(result.enrichedAt, null);
+  });
+
+  it('carries enrichment state through for an enriched lead', async () => {
+    const repository = {
+      findOwned: async () =>
+        leadSnapshot({
+          enrichmentStatus: 'PARTIALLY_ENRICHED',
+          enrichmentSnapshot: { website: { title: 'T', description: null, techHints: [], socialLinks: [] } },
+          enrichedAt: '2026-08-17T16:50:40.000Z',
+        }),
+    } as unknown as LeadRepository;
+
+    const result = await new GetSavedLeadUseCase(repository).get('user-1', 'lead-1');
+
+    assert.equal(result.enrichmentStatus, 'PARTIALLY_ENRICHED');
+    assert.equal(result.enrichmentSnapshot?.website?.title, 'T');
+    assert.equal(result.enrichedAt, '2026-08-17T16:50:40.000Z');
   });
 
   it('throws NotFound when the lead is not owned', async () => {

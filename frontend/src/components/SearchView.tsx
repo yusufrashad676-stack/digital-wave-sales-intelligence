@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { SavedLead } from '../api/leads';
+import { enrichExecution, getExecutionResults } from '../api/executions';
+import type { EnrichmentView } from '../api/executions';
 import { searchBusinesses } from '../api/search';
 import type { SearchFilters, SearchResult } from '../api/search';
-import { IconSearch } from './icons';
+import { IconGlobe, IconRefresh, IconSearch } from './icons';
 import LeadCard from './LeadCard';
 import SearchPanel from './SearchPanel';
 
@@ -24,9 +26,13 @@ export default function SearchView({ rerun, onConsumeRerun, savedLeads, onSaveLe
   const [verifiedOnly, setVerifiedOnly] = useState(false);
 
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [executionId, setExecutionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
+  const [enriching, setEnriching] = useState(false);
+  const [enrichError, setEnrichError] = useState<string | null>(null);
+  const [enrichmentMap, setEnrichmentMap] = useState<Map<string, EnrichmentView>>(new Map());
 
   const [lastSearch, setLastSearch] = useState<{ query: string; filters: SearchFilters } | null>(null);
 
@@ -34,10 +40,13 @@ export default function SearchView({ rerun, onConsumeRerun, savedLeads, onSaveLe
     setLoading(true);
     setError(null);
     setResults([]);
+    setEnrichmentMap(new Map());
+    setExecutionId(null);
     setLastSearch({ query: searchQuery, filters });
     try {
       const response = await searchBusinesses(searchQuery, filters);
-      setResults(response.data);
+      setResults(response.results);
+      setExecutionId(response.executionId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ غير متوقع أثناء البحث');
     } finally {
@@ -93,6 +102,27 @@ export default function SearchView({ rerun, onConsumeRerun, savedLeads, onSaveLe
   function handleRetry() {
     if (lastSearch !== null) {
       void performSearch(lastSearch.query, lastSearch.filters);
+    }
+  }
+
+  async function handleEnrich() {
+    if (executionId === null || enriching) return;
+    setEnriching(true);
+    setEnrichError(null);
+    try {
+      await enrichExecution(executionId);
+      const resultsResponse = await getExecutionResults(executionId);
+      const enriched = new Map<string, EnrichmentView>();
+      for (const item of resultsResponse.data) {
+        if (item.enrichment !== null) {
+          enriched.set(item.providerRecordId, item.enrichment);
+        }
+      }
+      setEnrichmentMap(enriched);
+    } catch (err) {
+      setEnrichError(err instanceof Error ? err.message : 'حدث خطأ أثناء الإثراء');
+    } finally {
+      setEnriching(false);
     }
   }
 
@@ -163,12 +193,35 @@ export default function SearchView({ rerun, onConsumeRerun, savedLeads, onSaveLe
               <strong>{results.length}</strong> نتيجة
             </span>
             <span className="muted">اضغط «حفظ» لإضافته إلى العملاء المحتملين</span>
+            {executionId !== null && (
+              <button
+                type="button"
+                className="secondary enrich-btn"
+                disabled={enriching}
+                onClick={() => void handleEnrich()}
+              >
+                <IconGlobe width={14} height={14} />
+                {enriching ? 'جارٍ الإثراء…' : 'إثراء النتائج'}
+              </button>
+            )}
           </div>
+          {enrichError !== null && (
+            <div className="notice error" role="alert">
+              <p>{enrichError}</p>
+            </div>
+          )}
+          {enriching && (
+            <div className="enrich-progress">
+              <IconRefresh width={16} height={16} className="spin" />
+              <span>جارٍ إثراء النتائج ببيانات الموقع والحضور الرقمي…</span>
+            </div>
+          )}
           <div className="lead-grid">
             {results.map((result) => (
               <LeadCard
                 key={result.providerRecordId}
                 result={result}
+                enrichment={enrichmentMap.get(result.providerRecordId) ?? null}
                 savedLead={
                   savedIds.has(result.providerRecordId)
                     ? (savedLeads.find((lead) => lead.providerRecordId === result.providerRecordId) ?? null)

@@ -11,6 +11,7 @@ import {
   updateSavedLead,
 } from '../api/leads';
 import type { LeadStatus, SavedLead } from '../api/leads';
+import type { EnrichmentView } from '../api/executions';
 import type { SearchFilters, SearchResult } from '../api/search';
 import LeadsPipelineView from './LeadsPipelineView';
 import ResultDrawer from './ResultDrawer';
@@ -113,6 +114,12 @@ export default function Workspace({ accessToken, onLogout }: Props) {
     setSavedLeads((prev) => prev.filter((lead) => lead.id !== id));
   }, []);
 
+  const handleEnrichedLead = useCallback((id: string, enrichment: EnrichmentView | null) => {
+    setSavedLeads((prev) =>
+      prev.map((lead) => (lead.id === id ? { ...lead, enrichment } : lead)),
+    );
+  }, []);
+
   const handleRerun = useCallback((query: string, filters: SearchFilters) => {
     setRerun({ query, filters });
     setView('search');
@@ -130,6 +137,8 @@ export default function Workspace({ accessToken, onLogout }: Props) {
     drawerResult === null
       ? null
       : (savedLeads.find((lead) => lead.providerRecordId === drawerResult.providerRecordId) ?? null);
+
+  const drawerEnrichment = drawerSavedLead?.enrichment ?? null;
 
   const displayName = user?.displayName ?? user?.email ?? '';
   const initial = displayName.trim().charAt(0).toUpperCase() || '؟';
@@ -193,6 +202,7 @@ export default function Workspace({ accessToken, onLogout }: Props) {
             onOpen={openFromSaved}
             onStatusChange={(id, status) => void handleUpdateLead(id, { status })}
             onRemove={handleRemoveLead}
+            onEnriched={handleEnrichedLead}
             onStartSearch={() => setView('search')}
           />
         )}
@@ -212,6 +222,7 @@ export default function Workspace({ accessToken, onLogout }: Props) {
       {drawerResult !== null && (
         <ResultDrawer
           result={drawerResult}
+          enrichment={drawerEnrichment}
           savedLead={drawerSavedLead}
           saving={savingLead}
           onSave={() => void handleSaveLead(drawerResult)}

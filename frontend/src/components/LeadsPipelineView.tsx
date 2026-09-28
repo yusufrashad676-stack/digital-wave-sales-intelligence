@@ -1,6 +1,6 @@
 import type { SavedLead } from '../api/leads';
 import { LEAD_STATUSES, LEAD_STATUS_LABELS } from '../api/search-options';
-import { IconStar } from './icons';
+import { IconGlobe, IconStar } from './icons';
 
 interface Props {
   leads: SavedLead[];
@@ -82,6 +82,11 @@ export default function LeadsPipelineView({ leads, loading, error, onRetry, onOp
                         <strong className="pipeline-card-name">{lead.companyName}</strong>
                         {lead.area !== null && <span className="pipeline-card-area">{lead.area}</span>}
                         <span className="pipeline-card-meta">
+                          {lead.enrichment !== null && lead.enrichment !== undefined && (
+                            <span className="pipeline-enrichment-indicator" title={`الإثراء: ${lead.enrichment.status}`}>
+                              <IconGlobe width={11} height={11} />
+                            </span>
+                          )}
                           {lead.rating !== null && (
                             <span className="rating">
                               <IconStar width={12} height={12} />

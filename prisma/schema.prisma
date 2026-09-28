@@ -1533,6 +1533,9 @@ model Lead {
   ratingCount        Int?                           @map("rating_count")
   sourceUrl          String?                        @map("source_url") @db.VarChar(2048)
   verificationStatus SearchResultVerificationStatus @default(UNKNOWN) @map("verification_status")
+  enrichmentStatus   EnrichmentStatus              @default(PENDING) @map("enrichment_status")
+  enrichmentSnapshot Json?                         @map("enrichment_snapshot")
+  enrichedAt         DateTime?                     @map("enriched_at") @db.Timestamptz
   retrievedAt        DateTime                       @map("retrieved_at") @db.Timestamptz
   savedAt            DateTime                       @default(now()) @map("saved_at") @db.Timestamptz
 
@@ -1549,6 +1552,8 @@ model Lead {
   @@index([userId, createdAt], map: "idx_leads_user_id_created_at")
   @@index([userId, status], map: "idx_leads_user_id_status")
   @@index([providerRecordId], map: "idx_leads_provider_record_id")
+  @@index([enrichmentStatus], map: "idx_leads_enrichment_status")
+  @@index([userId, enrichmentStatus], map: "idx_leads_user_id_enrichment_status")
   @@index([createdById], map: "idx_leads_created_by_id")
   @@index([updatedById], map: "idx_leads_updated_by_id")
   @@index([deletedById], map: "idx_leads_deleted_by_id")

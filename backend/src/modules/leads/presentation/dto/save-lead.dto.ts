@@ -8,6 +8,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   Max,
   MaxLength,
@@ -99,4 +100,12 @@ export class SaveLeadDto {
   @ApiProperty({ example: '2026-08-15T10:00:00.000Z' })
   @IsISO8601()
   retrievedAt!: string;
+
+  @ApiPropertyOptional({
+    example: '9c1a2e34-5b67-89cd-ef01-234567890abc',
+    description: 'Source search result; enrichment state is copied server-side from it',
+  })
+  @IsOptional()
+  @IsUUID()
+  searchResultId?: string;
 }

@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppConfig } from '../../config/configuration.js';
+import { EnrichmentEngine } from './application/services/enrichment-engine.js';
 import { EnrichSearchResultsUseCase } from './application/use-cases/enrich-search-results.usecase.js';
+import { GetExecutionUseCase } from './application/use-cases/get-execution.usecase.js';
+import { GetExecutionResultsUseCase } from './application/use-cases/get-execution-results.usecase.js';
 import { GetSearchHistoryUseCase } from './application/use-cases/get-search-history.usecase.js';
 import { RunDiscoveryUseCase } from './application/use-cases/run-discovery.usecase.js';
 import { SearchCompaniesUseCase } from './application/use-cases/search-companies.usecase.js';
@@ -26,11 +29,12 @@ import {
 } from './infrastructure/providers/enrichment-provider.factory.js';
 import { createSearchProvider } from './infrastructure/providers/search-provider.factory.js';
 import { EnrichController } from './presentation/controllers/enrich.controller.js';
+import { ExecutionResultsController } from './presentation/controllers/execution-results.controller.js';
 import { RunController } from './presentation/controllers/run.controller.js';
 import { SearchController } from './presentation/controllers/search.controller.js';
 
 @Module({
-  controllers: [SearchController, RunController, EnrichController],
+  controllers: [SearchController, RunController, EnrichController, ExecutionResultsController],
   providers: [
     {
       provide: SearchProviderPort,
@@ -60,10 +64,14 @@ import { SearchController } from './presentation/controllers/search.controller.j
     { provide: SearchExecutionRepository, useClass: PrismaSearchExecutionRepository },
     { provide: SearchPersistenceRepository, useClass: PrismaSearchPersistenceRepository },
     { provide: EnrichmentRepository, useClass: PrismaEnrichmentRepository },
+    EnrichmentEngine,
     SearchCompaniesUseCase,
     RunDiscoveryUseCase,
     GetSearchHistoryUseCase,
     EnrichSearchResultsUseCase,
+    GetExecutionUseCase,
+    GetExecutionResultsUseCase,
   ],
+  exports: [EnrichmentEngine],
 })
 export class SearchModule {}

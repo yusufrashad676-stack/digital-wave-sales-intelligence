@@ -8,6 +8,7 @@ import { DEFAULT_HISTORY_LIMIT, GetSearchHistoryUseCase } from './get-search-his
 function historyItem(overrides: Partial<SearchJobHistoryItem> = {}): SearchJobHistoryItem {
   return {
     id: 'job-1',
+    executionId: 'exec-1',
     query: 'عيادات',
     filters: {},
     status: 'COMPLETED',

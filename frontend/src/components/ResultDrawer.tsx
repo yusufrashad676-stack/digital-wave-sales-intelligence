@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { LeadStatus, SavedLead } from '../api/leads';
+import type { EnrichmentView, SocialProfile } from '../api/executions';
 import type { SearchResult } from '../api/search';
 import {
   CATEGORY_LABELS,
+  ENRICHMENT_STATUS_LABELS,
   LEAD_STATUS_LABELS,
   LEAD_STATUSES,
   PROVIDER_LABELS,
@@ -13,6 +15,7 @@ import { IconBookmark, IconClose, IconGlobe, IconNote, IconPhone, IconStar, Icon
 
 interface Props {
   result: SearchResult;
+  enrichment?: EnrichmentView | null;
   savedLead: SavedLead | null;
   saving: boolean;
   onSave: () => void;
@@ -113,6 +116,7 @@ function NotesEditor({
 
 export default function ResultDrawer({
   result,
+  enrichment = null,
   savedLead,
   saving,
   onSave,
@@ -225,6 +229,65 @@ export default function ResultDrawer({
               )}
             </Field>
           </Section>
+
+          {(enrichment !== null && enrichment !== undefined) && (
+            <Section title="الحضور الرقمي">
+              <Field label="حالة الإثراء">
+                <span className={`badge badge-enrichment badge-enrichment-${enrichment.status.toLowerCase()}`}>
+                  {ENRICHMENT_STATUS_LABELS[enrichment.status] ?? enrichment.status}
+                </span>
+              </Field>
+              {enrichment.enrichedAt !== null && (
+                <Field label="تاريخ الإثراء">
+                  {new Date(enrichment.enrichedAt).toLocaleString('ar-EG')}
+                </Field>
+              )}
+              {enrichment.website !== null && (
+                <>
+                  <Field label="عنوان الموقع">
+                    {enrichment.website.title ?? 'غير متوفر'}
+                  </Field>
+                  {enrichment.website.description !== null && (
+                    <Field label="وصف الموقع">
+                      <span className="drawer-enrichment-desc">{enrichment.website.description}</span>
+                    </Field>
+                  )}
+                  {enrichment.website.techHints.length > 0 && (
+                    <Field label="التقنيات">
+                      <div className="chip-row">
+                        {enrichment.website.techHints.map((tech) => (
+                          <span key={tech} className="chip static">{tech}</span>
+                        ))}
+                      </div>
+                    </Field>
+                  )}
+                </>
+              )}
+              {enrichment.social !== null && enrichment.social.profiles.length > 0 && (
+                <Field label="حسابات التواصل">
+                  <div className="drawer-social-profiles">
+                    {enrichment.social.profiles.map((profile: SocialProfile) => (
+                      <div key={`${profile.platform}-${profile.handle}`} className="drawer-social-profile">
+                        <span className="badge badge-neutral">{profile.platform}</span>
+                        <span dir="ltr">{profile.handle}</span>
+                        {profile.verified && <span className="badge badge-verified">موثّق</span>}
+                        {profile.profileUrl !== null && (
+                          <a href={profile.profileUrl} target="_blank" rel="noreferrer" className="cell-link">
+                            رابط
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </Field>
+              )}
+              {enrichment.website === null && enrichment.social === null && (
+                <Field label="التفاصيل">
+                  <span className="muted">لا توجد بيانات إثراء متاحة.</span>
+                </Field>
+              )}
+            </Section>
+          )}
 
           <Section title={savedLead !== null ? 'إدارة العميل المحتمل' : 'حفظ العميل المحتمل'}>
             {savedLead === null ? (

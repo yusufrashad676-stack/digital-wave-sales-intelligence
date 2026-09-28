@@ -1375,6 +1375,157 @@ button.primary.small {
   white-space: nowrap;
 }
 
+/* ---------- Enrichment badges ---------- */
+
+.badge-enrichment {
+  gap: 3px;
+}
+
+.badge-enrichment-enriched {
+  background: #e6f4ea;
+  color: #137333;
+}
+
+.badge-enrichment-partially_enriched {
+  background: #fef7e0;
+  color: #9a6700;
+}
+
+.badge-enrichment-in_progress {
+  background: #e8eefc;
+  color: var(--primary);
+}
+
+.badge-enrichment-pending {
+  background: var(--border);
+  color: var(--muted);
+}
+
+.badge-enrichment-enrichment_failed {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+.badge-enrichment-skipped {
+  background: var(--border);
+  color: var(--muted);
+}
+
+/* ---------- Enrich action ---------- */
+
+.enrich-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+}
+
+.enrich-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 0.88rem;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+/* ---------- Lead card wrap (saved leads with enrich button) ---------- */
+
+.lead-card-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.enrich-lead-btn {
+  align-self: flex-end;
+  margin-top: -4px;
+  font-size: 0.82rem;
+  padding: 4px 10px;
+}
+
+/* ---------- Drawer enrichment ---------- */
+
+.drawer-enrichment-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.88rem;
+}
+
+.drawer-social-profiles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drawer-social-profile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  flex-wrap: wrap;
+}
+
+/* ---------- Pipeline enrichment indicator ---------- */
+
+.pipeline-enrichment-indicator {
+  color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ---------- History execution detail ---------- */
+
+.history-execution-detail {
+  width: 100%;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.history-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.history-result-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 0.85rem;
+}
+
+.history-result-name {
+  font-weight: 600;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 900px) {

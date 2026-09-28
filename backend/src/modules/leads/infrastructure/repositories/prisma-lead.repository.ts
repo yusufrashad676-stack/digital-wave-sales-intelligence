@@ -1,14 +1,29 @@
 import { Injectable } from '@nestjs/common';
-import type { Lead, Prisma } from '../../../../database/generated/prisma/client.js';
+import { Prisma } from '../../../../database/generated/prisma/client.js';
+import type { Lead } from '../../../../database/generated/prisma/client.js';
 import { PrismaService } from '../../../../database/prisma/prisma.service.js';
-import type { LeadSnapshot, LeadStatus, SaveLeadInput } from '../../domain/entities/lead.entity.js';
+import type {
+  LeadEnrichmentCopy,
+  LeadEnrichmentSnapshot,
+  LeadSnapshot,
+  LeadStatus,
+  SaveLeadInput,
+} from '../../domain/entities/lead.entity.js';
 import { LeadRepository } from '../../domain/ports/lead.repository.js';
+
+function toSnapshotValue(snapshot: LeadEnrichmentSnapshot | null | undefined) {
+  return snapshot === null || snapshot === undefined ? Prisma.JsonNull : (snapshot as Prisma.InputJsonValue);
+}
+
+function toStatusValue(status: string | undefined): Lead['enrichmentStatus'] {
+  return (status ?? 'PENDING') as Lead['enrichmentStatus'];
+}
 
 @Injectable()
 export class PrismaLeadRepository implements LeadRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async save(userId: string, input: SaveLeadInput): Promise<LeadSnapshot> {
+  async save(userId: string, input: SaveLeadInput, enrichment?: LeadEnrichmentCopy | null): Promise<LeadSnapshot> {
     const row = await this.prisma.client.$transaction(async (tx) => {
       const existing = await tx.lead.findFirst({
         where: { userId, providerRecordId: input.providerRecordId },
@@ -32,14 +47,29 @@ export class PrismaLeadRepository implements LeadRepository {
             verificationStatus: input.verificationStatus ?? 'UNKNOWN',
             sourceUrl: input.sourceUrl,
             retrievedAt: new Date(input.retrievedAt),
+            enrichmentStatus: toStatusValue(enrichment?.enrichmentStatus),
+            enrichmentSnapshot: toSnapshotValue(enrichment?.enrichmentSnapshot),
+            enrichedAt: enrichment?.enrichedAt ?? undefined,
             createdById: userId,
             updatedById: userId,
           },
         });
       }
       if (existing.deletedAt === null) {
-        // Idempotent re-save: return the active lead untouched.
-        return tx.lead.findUniqueOrThrow({ where: { id: existing.id } });
+        if (enrichment === null || enrichment === undefined) {
+          // Idempotent re-save: return the active lead untouched.
+          return tx.lead.findUniqueOrThrow({ where: { id: existing.id } });
+        }
+        // Idempotent re-save with an enrichment source: refresh enrichment columns only.
+        return tx.lead.update({
+          where: { id: existing.id },
+          data: {
+            enrichmentStatus: enrichment.enrichmentStatus as Lead['enrichmentStatus'],
+            enrichmentSnapshot: toSnapshotValue(enrichment.enrichmentSnapshot),
+            enrichedAt: enrichment.enrichedAt ?? undefined,
+            updatedById: userId,
+          },
+        });
       }
       // Re-save after removal = restore (soft-delete semantics, ADR-005).
       return tx.lead.update({
@@ -49,6 +79,7 @@ export class PrismaLeadRepository implements LeadRepository {
           status: 'NEW',
           notes: null,
           providerId: input.providerId,
+          providerRecordId: input.providerRecordId,
           companyName: input.companyName,
           category: input.category,
           formattedAddress: input.address,
@@ -61,6 +92,9 @@ export class PrismaLeadRepository implements LeadRepository {
           verificationStatus: input.verificationStatus ?? 'UNKNOWN',
           sourceUrl: input.sourceUrl,
           retrievedAt: new Date(input.retrievedAt),
+          enrichmentStatus: toStatusValue(enrichment?.enrichmentStatus),
+          enrichmentSnapshot: toSnapshotValue(enrichment?.enrichmentSnapshot),
+          enrichedAt: enrichment?.enrichedAt ?? undefined,
           savedAt: new Date(),
           updatedById: userId,
         },
@@ -116,6 +150,49 @@ export class PrismaLeadRepository implements LeadRepository {
     });
     return result.count > 0;
   }
+
+  async claimForEnrichment(userId: string, leadId: string, staleThresholdMs: number): Promise<boolean> {
+    const staleThreshold = new Date(Date.now() - staleThresholdMs);
+    const result = await this.prisma.client.lead.updateMany({
+      where: {
+        id: leadId,
+        userId,
+        deletedAt: null,
+        OR: [
+          { enrichmentStatus: { not: 'IN_PROGRESS' } },
+          { enrichmentStatus: 'IN_PROGRESS', updatedAt: { lt: staleThreshold } },
+        ],
+      },
+      data: { enrichmentStatus: 'IN_PROGRESS', updatedById: userId },
+    });
+    return result.count > 0;
+  }
+
+  async updateEnrichmentResult(
+    userId: string,
+    leadId: string,
+    status: string,
+    snapshot: LeadEnrichmentSnapshot | null,
+    enrichedAt: Date,
+  ): Promise<LeadSnapshot | null> {
+    const row = await this.prisma.client.$transaction(async (tx) => {
+      const existing = await tx.lead.findFirst({
+        where: { id: leadId, userId, deletedAt: null },
+        select: { id: true },
+      });
+      if (existing === null) return null;
+      return tx.lead.update({
+        where: { id: existing.id },
+        data: {
+          enrichmentStatus: status as Lead['enrichmentStatus'],
+          enrichmentSnapshot: toSnapshotValue(snapshot),
+          enrichedAt,
+          updatedById: userId,
+        },
+      });
+    });
+    return row === null ? null : mapLead(row);
+  }
 }
 
 function mapLead(row: Lead): LeadSnapshot {
@@ -137,6 +214,9 @@ function mapLead(row: Lead): LeadSnapshot {
     ratingCount: row.ratingCount,
     verificationStatus: row.verificationStatus,
     sourceUrl: row.sourceUrl,
+    enrichmentStatus: row.enrichmentStatus,
+    enrichmentSnapshot: (row.enrichmentSnapshot ?? null) as LeadSnapshot['enrichmentSnapshot'],
+    enrichedAt: row.enrichedAt === null ? null : row.enrichedAt.toISOString(),
     retrievedAt: row.retrievedAt.toISOString(),
     savedAt: row.savedAt.toISOString(),
     createdAt: row.createdAt.toISOString(),

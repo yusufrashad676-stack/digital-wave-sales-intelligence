@@ -86,3 +86,18 @@ export const JOB_STATUS_LABELS: Record<string, string> = {
   PAUSED: 'متوقف مؤقتًا',
   CANCELLED: 'ملغي',
 };
+
+export const ENRICHMENT_STATUS_LABELS: Record<string, string> = {
+  PENDING: 'في الانتظار',
+  IN_PROGRESS: 'جارٍ الإثراء',
+  ENRICHED: 'تم الإثراء',
+  PARTIALLY_ENRICHED: 'إثراء جزئي',
+  ENRICHMENT_FAILED: 'فشل الإثراء',
+  SKIPPED: 'متخطّى',
+};
+
+export const QUALIFICATION_LABELS: Record<string, string> = {
+  QUALIFIED: 'مؤهل',
+  'UNVERIFIED_SOCIAL': 'تواصل غير موثّق',
+  REJECTED: 'مرفوض',
+};

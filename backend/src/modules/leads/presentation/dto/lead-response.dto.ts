@@ -1,5 +1,59 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { projectEnrichment } from '../../../../common/utils/enrichment-projection.util.js';
 import type { LeadSnapshot } from '../../domain/entities/lead.entity.js';
+
+export class LeadWebsiteEnrichmentDto {
+  @ApiPropertyOptional({ nullable: true })
+  title!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  description!: string | null;
+
+  @ApiProperty({ type: [String] })
+  techHints!: string[];
+
+  @ApiProperty({ type: [String] })
+  socialLinks!: string[];
+}
+
+export class LeadSocialProfileDto {
+  @ApiProperty()
+  platform!: string;
+
+  @ApiProperty()
+  handle!: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  profileUrl!: string | null;
+
+  @ApiProperty()
+  confidence!: number;
+
+  @ApiProperty()
+  verified!: boolean;
+}
+
+export class LeadSocialEnrichmentDto {
+  @ApiProperty({ type: [LeadSocialProfileDto] })
+  profiles!: LeadSocialProfileDto[];
+}
+
+export class LeadEnrichmentDto {
+  @ApiProperty({
+    example: 'ENRICHED',
+    enum: ['PENDING', 'IN_PROGRESS', 'ENRICHED', 'PARTIALLY_ENRICHED', 'ENRICHMENT_FAILED', 'SKIPPED'],
+  })
+  status!: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  enrichedAt!: string | null;
+
+  @ApiPropertyOptional({ type: LeadWebsiteEnrichmentDto, nullable: true })
+  website!: LeadWebsiteEnrichmentDto | null;
+
+  @ApiPropertyOptional({ type: LeadSocialEnrichmentDto, nullable: true })
+  social!: LeadSocialEnrichmentDto | null;
+}
 
 export class LeadResponseDto {
   @ApiProperty({ example: '2f1d4b3a-...' })
@@ -50,6 +104,9 @@ export class LeadResponseDto {
   @ApiPropertyOptional({ nullable: true })
   sourceUrl!: string | null;
 
+  @ApiPropertyOptional({ type: LeadEnrichmentDto, nullable: true })
+  enrichment!: LeadEnrichmentDto | null;
+
   @ApiProperty({ example: '2026-08-15T10:00:00.000Z' })
   retrievedAt!: string;
 
@@ -80,6 +137,11 @@ export class LeadResponseDto {
     dto.ratingCount = lead.ratingCount;
     dto.verificationStatus = lead.verificationStatus;
     dto.sourceUrl = lead.sourceUrl;
+    dto.enrichment = projectEnrichment(
+      lead.enrichmentStatus,
+      lead.enrichmentSnapshot,
+      lead.enrichedAt === null ? null : new Date(lead.enrichedAt),
+    );
     dto.retrievedAt = lead.retrievedAt;
     dto.savedAt = lead.savedAt;
     dto.createdAt = lead.createdAt;

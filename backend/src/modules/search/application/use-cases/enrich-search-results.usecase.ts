@@ -1,21 +1,12 @@
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ErrorCode } from '../../../../common/exceptions/error-codes.js';
 import { NotFoundException } from '../../../../common/exceptions/not-found.exception.js';
 import { BusinessRuleException } from '../../../../common/exceptions/business-rule.exception.js';
+import { ForbiddenException } from '../../../../common/exceptions/forbidden.exception.js';
 import type { AuthPrincipal } from '../../../../common/interfaces/auth-principal.interface.js';
-import type {
-  EnrichmentError,
-  EnrichmentSnapshot,
-  SocialProfileData,
-  SocialEnrichmentData,
-  WebsiteEnrichmentData,
-} from '../../domain/entities/enrichment-snapshot.js';
-import { CURRENT_ENRICHMENT_VERSION } from '../../domain/entities/enrichment-snapshot.js';
 import { EnrichmentRepository } from '../../domain/ports/enrichment.repository.js';
-import { WebsiteEnrichmentPort } from '../../domain/ports/website-enrichment.port.js';
-import { SocialDiscoveryPort } from '../../domain/ports/social-discovery.port.js';
-import { SocialVerificationPort } from '../../domain/ports/social-verification.port.js';
 import type { EnrichmentResultRow } from '../../domain/ports/enrichment.repository.js';
+import { EnrichmentEngine, type EnrichmentTarget } from '../services/enrichment-engine.js';
 
 const BATCH_DELAY_MS = 100;
 
@@ -52,9 +43,7 @@ export class EnrichSearchResultsUseCase {
 
   constructor(
     @Inject(EnrichmentRepository) private readonly enrichmentRepo: EnrichmentRepository,
-    @Inject(WebsiteEnrichmentPort) private readonly websiteProvider: WebsiteEnrichmentPort,
-    @Optional() @Inject(SocialDiscoveryPort) private readonly socialDiscovery?: SocialDiscoveryPort,
-    @Optional() @Inject(SocialVerificationPort) private readonly socialVerification?: SocialVerificationPort,
+    private readonly engine: EnrichmentEngine,
   ) {}
 
   async execute(input: EnrichSearchResultsInput): Promise<EnrichmentRunResult> {
@@ -65,7 +54,7 @@ export class EnrichSearchResultsUseCase {
     const concurrency = options?.concurrency ?? 5;
 
     // 1. Load execution and verify ownership + status
-    const execution = await this.enrichmentRepo.findExecutionById(executionId);
+    const execution = await this.enrichmentRepo.findExecutionDetail(executionId);
     if (!execution) {
       throw new NotFoundException(`Execution ${executionId} not found`);
     }
@@ -75,8 +64,8 @@ export class EnrichSearchResultsUseCase {
         `Execution must be COMPLETED before enrichment (current: ${execution.status})`,
       );
     }
-    if (execution.createdById !== null && execution.createdById !== principal.userId) {
-      throw new BusinessRuleException(ErrorCode.FORBIDDEN, 'Execution belongs to another user');
+    if (execution.jobUserId !== principal.userId) {
+      throw new ForbiddenException('Execution belongs to another user');
     }
 
     // 2. Reset stale IN_PROGRESS results (crash recovery)
@@ -193,125 +182,21 @@ export class EnrichSearchResultsUseCase {
     // Mark as IN_PROGRESS
     await this.enrichmentRepo.updateEnrichmentStatus(result.id, 'IN_PROGRESS', null);
 
-    const errors: EnrichmentError[] = [];
-    let websiteData: WebsiteEnrichmentData | undefined;
-    let socialData: SocialEnrichmentData | undefined;
-    let websiteFound = false;
-    let socialProfilesFound = 0;
-    let socialProfilesVerified = 0;
-
-    // Website enrichment
-    if (!skipWebsite && result.websiteDomain) {
-      try {
-        const websiteResult = await this.websiteProvider.enrich({
-          domain: result.websiteDomain,
-          timeoutMs: 5000,
-        });
-        websiteData = websiteResult.data;
-        websiteFound = true;
-      } catch (error) {
-        errors.push({
-          type: 'website',
-          message: error instanceof Error ? error.message : String(error),
-          provider: this.websiteProvider.providerId,
-        });
-      }
-    }
-
-    // Social enrichment
-    if (!skipSocial && this.socialDiscovery) {
-      try {
-        const socialResult = await this.socialDiscovery.discover({
-          domain: result.websiteDomain ?? '',
-          companyName: result.companyName,
-          timeoutMs: 5000,
-        });
-
-        socialProfilesFound = socialResult.profiles.length;
-        const profiles: SocialProfileData[] = [];
-
-        for (const profile of socialResult.profiles) {
-          let verified = false;
-
-          if (this.socialVerification) {
-            try {
-              const verification = await this.socialVerification.verify({
-                platform: profile.platform,
-                profileUrl: profile.profileUrl,
-                handle: profile.handle,
-                timeoutMs: 3000,
-              });
-              verified = verification.exists && verification.active;
-              if (verified) socialProfilesVerified++;
-            } catch {
-              // Verification failure = unverified, not a crash
-            }
-          }
-
-          profiles.push({
-            platform: profile.platform,
-            handle: profile.handle,
-            profileUrl: profile.profileUrl,
-            confidence: profile.confidence,
-            verified,
-          });
-        }
-
-        socialData = {
-          profiles,
-          discoveredAt: socialResult.discoveredAt.toISOString(),
-          provider: socialResult.provider,
-        };
-      } catch (error) {
-        errors.push({
-          type: 'social',
-          message: error instanceof Error ? error.message : String(error),
-          provider: this.socialDiscovery.providerId,
-        });
-      }
-    }
-
-    // Determine final status
-    const hasWebsite = websiteData !== undefined;
-    const hasSocial = socialData !== undefined;
-    const hadWebsiteOpportunity = !skipWebsite && result.websiteDomain !== null;
-    const hadSocialOpportunity = !skipSocial && this.socialDiscovery !== undefined;
-
-    let finalStatus: string;
-    if (!hadWebsiteOpportunity && !hadSocialOpportunity) {
-      finalStatus = 'SKIPPED';
-    } else if (hadWebsiteOpportunity && hadSocialOpportunity) {
-      if (hasWebsite && hasSocial) {
-        finalStatus = 'ENRICHED';
-      } else if (hasWebsite || hasSocial) {
-        finalStatus = 'PARTIALLY_ENRICHED';
-      } else {
-        finalStatus = 'ENRICHMENT_FAILED';
-      }
-    } else if (hadWebsiteOpportunity) {
-      finalStatus = hasWebsite ? 'ENRICHED' : 'ENRICHMENT_FAILED';
-    } else {
-      // hadSocialOpportunity only
-      finalStatus = hasSocial ? 'ENRICHED' : 'ENRICHMENT_FAILED';
-    }
-
-    // Build snapshot
-    const snapshot: EnrichmentSnapshot = {
-      enrichedAt: new Date().toISOString(),
-      enrichmentVersion: CURRENT_ENRICHMENT_VERSION,
+    const target: EnrichmentTarget = {
+      websiteDomain: result.websiteDomain,
+      companyName: result.companyName,
     };
-    if (websiteData) snapshot.website = websiteData;
-    if (socialData) snapshot.social = socialData;
-    if (errors.length > 0) snapshot.errors = errors;
+
+    const engineResult = await this.engine.enrichSingleTarget(target, { skipWebsite, skipSocial });
 
     // Persist
-    await this.enrichmentRepo.updateEnrichmentStatus(result.id, finalStatus, snapshot);
+    await this.enrichmentRepo.updateEnrichmentStatus(result.id, engineResult.status, engineResult.snapshot);
 
     return {
-      status: finalStatus,
-      websiteFound,
-      socialProfilesFound,
-      socialProfilesVerified,
+      status: engineResult.status,
+      websiteFound: engineResult.websiteFound,
+      socialProfilesFound: engineResult.socialProfilesFound,
+      socialProfilesVerified: engineResult.socialProfilesVerified,
     };
   }
 }

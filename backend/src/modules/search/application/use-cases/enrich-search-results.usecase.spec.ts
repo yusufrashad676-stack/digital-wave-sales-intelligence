@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { EnrichSearchResultsUseCase } from './enrich-search-results.usecase.js';
+import { EnrichmentEngine } from '../services/enrichment-engine.js';
 import type { EnrichmentRepository, EnrichmentResultRow } from '../../domain/ports/enrichment.repository.js';
 import type { WebsiteEnrichmentPort } from '../../domain/ports/website-enrichment.port.js';
 import type { SocialDiscoveryPort } from '../../domain/ports/social-discovery.port.js';
@@ -26,7 +27,7 @@ function makeExecution(overrides: Record<string, unknown> = {}) {
     id: 'exec-1',
     jobId: 'job-1',
     status: 'COMPLETED',
-    createdById: 'user-1',
+    jobUserId: 'user-1',
     metrics: null,
     ...overrides,
   };
@@ -38,7 +39,7 @@ function stubRepo(overrides: Partial<EnrichmentRepository> = {}): EnrichmentRepo
 
   return {
     findResultsByExecutionId: async () => [makeResult()],
-    findExecutionById: async () => makeExecution(),
+    findExecutionDetail: async () => makeExecution(),
     updateEnrichmentStatus: async (id, status, snapshot) => {
       statusUpdates.push({ id, status, snapshot });
     },
@@ -104,6 +105,18 @@ function stubSocialVerification(overrides: Partial<SocialVerificationPort> = {})
   };
 }
 
+function makeEngine(
+  websiteOverrides?: Partial<WebsiteEnrichmentPort>,
+  socialDiscOverrides?: Partial<SocialDiscoveryPort>,
+  socialVerOverrides?: Partial<SocialVerificationPort>,
+): EnrichmentEngine {
+  return new EnrichmentEngine(
+    stubWebsiteProvider(websiteOverrides),
+    socialDiscOverrides !== undefined ? stubSocialDiscovery(socialDiscOverrides) : undefined,
+    socialVerOverrides !== undefined ? stubSocialVerification(socialVerOverrides) : undefined,
+  );
+}
+
 const principal = { userId: 'user-1', email: 'test@test.com', roles: ['MEMBER'] as string[] };
 
 describe('EnrichSearchResultsUseCase', () => {
@@ -117,7 +130,7 @@ describe('EnrichSearchResultsUseCase', () => {
       findResultsByExecutionId: async () => results,
     });
 
-    const useCase = new EnrichSearchResultsUseCase(repo, stubWebsiteProvider());
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine());
     const outcome = await useCase.execute({ executionId: 'exec-1', principal });
 
     assert.equal(outcome.status, 'COMPLETED');
@@ -129,7 +142,7 @@ describe('EnrichSearchResultsUseCase', () => {
   it('skips result without website when website enrichment is needed', async () => {
     const results = [makeResult({ id: 'r1', websiteDomain: 'a.com' }), makeResult({ id: 'r2', websiteDomain: null })];
     const repo = stubRepo({ findResultsByExecutionId: async () => results });
-    const useCase = new EnrichSearchResultsUseCase(repo, stubWebsiteProvider());
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine());
 
     const outcome = await useCase.execute({ executionId: 'exec-1', principal });
 
@@ -166,7 +179,7 @@ describe('EnrichSearchResultsUseCase', () => {
       },
     });
 
-    const useCase = new EnrichSearchResultsUseCase(repo, provider);
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine(provider));
     const outcome = await useCase.execute({ executionId: 'exec-1', principal });
 
     assert.equal(callCount, 3);
@@ -187,7 +200,7 @@ describe('EnrichSearchResultsUseCase', () => {
       },
     });
 
-    const useCase = new EnrichSearchResultsUseCase(repo, provider);
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine(provider));
     const outcome = await useCase.execute({ executionId: 'exec-1', principal });
 
     assert.equal(outcome.summary.failed, 2);
@@ -218,7 +231,7 @@ describe('EnrichSearchResultsUseCase', () => {
       },
     });
 
-    const useCase = new EnrichSearchResultsUseCase(repo, provider);
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine(provider));
     const outcome = await useCase.execute({ executionId: 'exec-1', principal });
 
     assert.equal(outcome.status, 'PARTIALLY_COMPLETED');
@@ -235,7 +248,7 @@ describe('EnrichSearchResultsUseCase', () => {
       },
     });
 
-    const useCase = new EnrichSearchResultsUseCase(repo, provider);
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine(provider));
     await useCase.execute({ executionId: 'exec-1', principal });
 
     const updates = (repo as unknown as { _statusUpdates: Array<{ snapshot: EnrichmentSnapshot | null }> })
@@ -257,7 +270,7 @@ describe('EnrichSearchResultsUseCase', () => {
       },
     });
 
-    const useCase = new EnrichSearchResultsUseCase(repo, provider);
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine(provider));
     const outcome = await useCase.execute({
       executionId: 'exec-1',
       principal,
@@ -279,7 +292,7 @@ describe('EnrichSearchResultsUseCase', () => {
       },
     });
 
-    const useCase = new EnrichSearchResultsUseCase(repo, stubWebsiteProvider(), socialDisc);
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine(undefined, socialDisc));
     const outcome = await useCase.execute({
       executionId: 'exec-1',
       principal,
@@ -318,7 +331,7 @@ describe('EnrichSearchResultsUseCase', () => {
       },
     });
 
-    const useCase = new EnrichSearchResultsUseCase(repo, provider);
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine(provider));
     await useCase.execute({
       executionId: 'exec-1',
       principal,
@@ -331,7 +344,7 @@ describe('EnrichSearchResultsUseCase', () => {
   it('transitions enrichment status correctly', async () => {
     const results = [makeResult({ id: 'r1' })];
     const repo = stubRepo({ findResultsByExecutionId: async () => results });
-    const useCase = new EnrichSearchResultsUseCase(repo, stubWebsiteProvider());
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine());
 
     await useCase.execute({ executionId: 'exec-1', principal });
 
@@ -363,7 +376,7 @@ describe('EnrichSearchResultsUseCase', () => {
       },
     });
 
-    const useCase = new EnrichSearchResultsUseCase(repo, provider);
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine(provider));
     await useCase.execute({ executionId: 'exec-1', principal });
 
     const metricsUpdates = (repo as unknown as { _metricsUpdates: Array<{ metrics: Record<string, unknown> }> })
@@ -377,7 +390,7 @@ describe('EnrichSearchResultsUseCase', () => {
 
   it('handles empty execution (no results)', async () => {
     const repo = stubRepo({ findResultsByExecutionId: async () => [] });
-    const useCase = new EnrichSearchResultsUseCase(repo, stubWebsiteProvider());
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine());
 
     const outcome = await useCase.execute({ executionId: 'exec-1', principal });
 
@@ -410,7 +423,7 @@ describe('EnrichSearchResultsUseCase', () => {
       },
     });
 
-    const useCase = new EnrichSearchResultsUseCase(repo, provider);
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine(provider));
     const outcome = await useCase.execute({ executionId: 'exec-1', principal });
 
     assert.equal(enrichCount, 1);
@@ -439,7 +452,7 @@ describe('EnrichSearchResultsUseCase', () => {
       },
     });
 
-    const useCase = new EnrichSearchResultsUseCase(repo, provider);
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine(provider));
     const outcome = await useCase.execute({ executionId: 'exec-1', principal });
 
     assert.equal(enrichCount, 1);
@@ -447,8 +460,8 @@ describe('EnrichSearchResultsUseCase', () => {
   });
 
   it('rejects execution not found', async () => {
-    const repo = stubRepo({ findExecutionById: async () => null });
-    const useCase = new EnrichSearchResultsUseCase(repo, stubWebsiteProvider());
+    const repo = stubRepo({ findExecutionDetail: async () => null });
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine());
 
     await assert.rejects(
       () => useCase.execute({ executionId: 'missing', principal }),
@@ -457,8 +470,8 @@ describe('EnrichSearchResultsUseCase', () => {
   });
 
   it('rejects execution not completed', async () => {
-    const repo = stubRepo({ findExecutionById: async () => makeExecution({ status: 'RUNNING' }) });
-    const useCase = new EnrichSearchResultsUseCase(repo, stubWebsiteProvider());
+    const repo = stubRepo({ findExecutionDetail: async () => makeExecution({ status: 'RUNNING' }) });
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine());
 
     await assert.rejects(
       () => useCase.execute({ executionId: 'exec-1', principal }),
@@ -468,13 +481,35 @@ describe('EnrichSearchResultsUseCase', () => {
 
   it('rejects execution owned by another user', async () => {
     const repo = stubRepo({
-      findExecutionById: async () => makeExecution({ createdById: 'other-user' }),
+      findExecutionDetail: async () => makeExecution({ jobUserId: 'other-user' }),
     });
-    const useCase = new EnrichSearchResultsUseCase(repo, stubWebsiteProvider());
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine());
 
     await assert.rejects(
       () => useCase.execute({ executionId: 'exec-1', principal }),
-      (err: Error) => err.name === 'BusinessRuleException',
+      (err: Error) => err.name === 'ForbiddenException',
+    );
+  });
+
+  it('rejects execution with null job owner (no null-bypass)', async () => {
+    const repo = stubRepo({
+      findExecutionDetail: async () => makeExecution({ jobUserId: null }),
+    });
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine());
+
+    await assert.rejects(
+      () => useCase.execute({ executionId: 'exec-1', principal }),
+      (err: Error) => err.name === 'ForbiddenException',
+    );
+  });
+
+  it('rejects execution whose job is soft-deleted (repo resolves to null)', async () => {
+    const repo = stubRepo({ findExecutionDetail: async () => null });
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine());
+
+    await assert.rejects(
+      () => useCase.execute({ executionId: 'exec-1', principal }),
+      (err: Error) => err.name === 'NotFoundException',
     );
   });
 
@@ -486,7 +521,7 @@ describe('EnrichSearchResultsUseCase', () => {
         return 2;
       },
     });
-    const useCase = new EnrichSearchResultsUseCase(repo, stubWebsiteProvider());
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine());
 
     await useCase.execute({ executionId: 'exec-1', principal });
 
@@ -499,7 +534,7 @@ describe('EnrichSearchResultsUseCase', () => {
     const socialDisc = stubSocialDiscovery();
     const socialVer = stubSocialVerification();
 
-    const useCase = new EnrichSearchResultsUseCase(repo, stubWebsiteProvider(), socialDisc, socialVer);
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine(undefined, socialDisc, socialVer));
     const outcome = await useCase.execute({ executionId: 'exec-1', principal });
 
     assert.equal(outcome.summary.enriched, 1);
@@ -524,7 +559,7 @@ describe('EnrichSearchResultsUseCase', () => {
       },
     });
 
-    const useCase = new EnrichSearchResultsUseCase(repo, stubWebsiteProvider(), socialDisc);
+    const useCase = new EnrichSearchResultsUseCase(repo, makeEngine(undefined, socialDisc));
     const outcome = await useCase.execute({ executionId: 'exec-1', principal });
 
     // Website was enriched, social failed → PARTIALLY_ENRICHED

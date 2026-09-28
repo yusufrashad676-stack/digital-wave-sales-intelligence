@@ -3,9 +3,10 @@ import { Prisma } from '../../../../database/generated/prisma/client.js';
 import { PrismaService } from '../../../../database/prisma/prisma.service.js';
 import type { EnrichmentSnapshot } from '../../domain/entities/enrichment-snapshot.js';
 import type {
-  EnrichmentExecutionRow,
   EnrichmentRepository,
   EnrichmentResultRow,
+  ExecutionDetailRow,
+  ExecutionResultRow,
 } from '../../domain/ports/enrichment.repository.js';
 
 @Injectable()
@@ -40,27 +41,87 @@ export class PrismaEnrichmentRepository implements EnrichmentRepository {
     }));
   }
 
-  async findExecutionById(executionId: string): Promise<EnrichmentExecutionRow | null> {
+  async findExecutionDetail(executionId: string): Promise<ExecutionDetailRow | null> {
     const row = await this.prisma.client.searchExecution.findUnique({
       where: { id: executionId },
       select: {
         id: true,
         jobId: true,
         status: true,
-        createdById: true,
+        createdAt: true,
+        finishedAt: true,
         metrics: true,
+        job: {
+          select: { query: true, filters: true, userId: true, deletedAt: true },
+        },
       },
     });
 
-    if (!row) return null;
+    if (!row || !row.job || row.job.deletedAt !== null) return null;
 
     return {
       id: row.id,
       jobId: row.jobId,
       status: row.status,
-      createdById: row.createdById,
-      metrics: row.metrics as Record<string, unknown> | null,
+      query: row.job.query,
+      filters: (row.job.filters as Record<string, unknown> | null) ?? null,
+      jobUserId: row.job.userId,
+      createdAt: row.createdAt,
+      finishedAt: row.finishedAt,
+      metrics: (row.metrics as Record<string, unknown> | null) ?? null,
     };
+  }
+
+  async findFullResultsByExecutionId(executionId: string): Promise<ExecutionResultRow[]> {
+    const rows = await this.prisma.client.searchResult.findMany({
+      where: { executionId, deletedAt: null },
+      select: {
+        id: true,
+        executionId: true,
+        providerId: true,
+        providerRecordId: true,
+        companyName: true,
+        category: true,
+        formattedAddress: true,
+        area: true,
+        phone: true,
+        email: true,
+        websiteDomain: true,
+        rating: true,
+        ratingCount: true,
+        sourceUrl: true,
+        verificationStatus: true,
+        ordering: true,
+        retrievedAt: true,
+        enrichmentStatus: true,
+        enrichmentSnapshot: true,
+        enrichedAt: true,
+      },
+      orderBy: { ordering: 'asc' },
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      executionId: row.executionId,
+      providerId: row.providerId,
+      providerRecordId: row.providerRecordId,
+      companyName: row.companyName,
+      category: row.category,
+      formattedAddress: row.formattedAddress,
+      area: row.area,
+      phone: row.phone,
+      email: row.email,
+      websiteDomain: row.websiteDomain,
+      rating: row.rating,
+      ratingCount: row.ratingCount,
+      sourceUrl: row.sourceUrl,
+      verificationStatus: row.verificationStatus,
+      ordering: row.ordering,
+      retrievedAt: row.retrievedAt,
+      enrichmentStatus: row.enrichmentStatus,
+      enrichmentSnapshot: row.enrichmentSnapshot as EnrichmentSnapshot | null,
+      enrichedAt: row.enrichedAt,
+    }));
   }
 
   async updateEnrichmentStatus(
@@ -134,5 +195,4 @@ export class PrismaEnrichmentRepository implements EnrichmentRepository {
   }
 }
 
-// Re-export the Prisma enum type for local use
 type EnrichmentStatus = 'PENDING' | 'IN_PROGRESS' | 'ENRICHED' | 'PARTIALLY_ENRICHED' | 'ENRICHMENT_FAILED' | 'SKIPPED';

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchSearchHistory } from '../api/search';
 import type { SearchFilters, SearchHistoryItem } from '../api/search';
-import { CATEGORY_LABELS, GOVERNORATE_LABELS, JOB_STATUS_LABELS } from '../api/search-options';
-import { IconHistory, IconRefresh } from './icons';
+import { enrichExecution, getExecutionResults } from '../api/executions';
+import type { ExecutionResultItem } from '../api/executions';
+import { CATEGORY_LABELS, ENRICHMENT_STATUS_LABELS, GOVERNORATE_LABELS, JOB_STATUS_LABELS } from '../api/search-options';
+import { IconGlobe, IconHistory, IconRefresh } from './icons';
 
 interface Props {
   onRerun: (query: string, filters: SearchFilters) => void;
@@ -42,6 +44,11 @@ export default function RecentSearchesView({ onRerun, onStartSearch }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null);
+  const [executionResults, setExecutionResults] = useState<ExecutionResultItem[]>([]);
+  const [executionLoading, setExecutionLoading] = useState(false);
+  const [enrichingId, setEnrichingId] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -58,6 +65,37 @@ export default function RecentSearchesView({ onRerun, onStartSearch }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function handleViewExecution(executionId: string) {
+    if (selectedExecutionId === executionId) {
+      setSelectedExecutionId(null);
+      setExecutionResults([]);
+      return;
+    }
+    setSelectedExecutionId(executionId);
+    setExecutionLoading(true);
+    try {
+      const response = await getExecutionResults(executionId);
+      setExecutionResults(response.data);
+    } catch {
+      setExecutionResults([]);
+    } finally {
+      setExecutionLoading(false);
+    }
+  }
+
+  async function handleEnrichHistory(executionId: string) {
+    setEnrichingId(executionId);
+    try {
+      await enrichExecution(executionId);
+      const response = await getExecutionResults(executionId);
+      setExecutionResults(response.data);
+    } catch {
+      // silent
+    } finally {
+      setEnrichingId(null);
+    }
+  }
 
   return (
     <div className="view">
@@ -121,11 +159,63 @@ export default function RecentSearchesView({ onRerun, onStartSearch }: Props) {
                   </div>
                 </div>
                 <div className="history-card-actions">
+                  {item.executionId !== null && (
+                    <>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={enrichingId === item.executionId}
+                        onClick={() => void handleEnrichHistory(item.executionId!)}
+                      >
+                        <IconGlobe width={16} height={16} />
+                        {enrichingId === item.executionId ? 'جارٍ الإثراء…' : 'إثراء'}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => void handleViewExecution(item.executionId!)}
+                      >
+                        {selectedExecutionId === item.executionId ? 'إخفاء' : 'عرض النتائج'}
+                      </button>
+                    </>
+                  )}
                   <button type="button" className="secondary" onClick={() => onRerun(item.query, item.filters)}>
                     <IconRefresh width={16} height={16} />
                     إعادة البحث
                   </button>
                 </div>
+                {selectedExecutionId === item.executionId && (
+                  <div className="history-execution-detail">
+                    {executionLoading ? (
+                      <div className="skeleton-results" aria-label="جارٍ تحميل النتائج…">
+                        {[0, 1, 2].map((i) => (
+                          <div key={i} className="skeleton-row" style={{ height: 48 }} />
+                        ))}
+                      </div>
+                    ) : executionResults.length === 0 ? (
+                      <p className="muted">لا توجد نتائج لهذه العملية.</p>
+                    ) : (
+                      <div className="history-results-list">
+                        {executionResults.map((r) => (
+                          <div key={r.resultId} className="history-result-row">
+                            <span className="history-result-name">{r.companyName}</span>
+                            {r.enrichment !== null && (
+                              <span className={`badge badge-enrichment badge-enrichment-${r.enrichment.status.toLowerCase()}`}>
+                                {ENRICHMENT_STATUS_LABELS[r.enrichment.status] ?? r.enrichment.status}
+                              </span>
+                            )}
+                            {r.enrichment?.website !== null && r.enrichment?.website !== undefined && (
+                              <span className="muted" dir="ltr">{r.enrichment.website.title}</span>
+                            )}
+                            {r.enrichment?.social !== null && r.enrichment?.social !== undefined && r.enrichment.social.profiles.length > 0 && (
+                              <span className="muted">{r.enrichment.social.profiles.length} حساب</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </article>
             );
           })}

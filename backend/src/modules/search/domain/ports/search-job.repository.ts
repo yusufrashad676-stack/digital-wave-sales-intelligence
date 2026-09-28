@@ -8,6 +8,7 @@ export interface SearchJobSnapshot {
 
 export interface SearchJobHistoryItem {
   id: string;
+  executionId: string | null;
   query: string;
   filters: SearchFilters;
   status: SearchJobStatus;

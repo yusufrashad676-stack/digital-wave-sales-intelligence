@@ -48,6 +48,7 @@ export class PrismaSearchJobRepository implements SearchJobRepository {
           orderBy: { createdAt: 'desc' },
           take: 1,
           select: {
+            id: true,
             finishedAt: true,
             _count: { select: { results: true } },
           },
@@ -57,6 +58,7 @@ export class PrismaSearchJobRepository implements SearchJobRepository {
 
     return rows.map((row) => ({
       id: row.id,
+      executionId: row.executions[0]?.id ?? null,
       query: row.query,
       filters: row.filters as unknown as SearchJobHistoryItem['filters'],
       status: row.status,

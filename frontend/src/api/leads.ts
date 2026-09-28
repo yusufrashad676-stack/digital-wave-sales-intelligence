@@ -1,4 +1,5 @@
 import { requestJson } from './request';
+import type { EnrichmentView } from './executions';
 import type { SearchResult } from './search';
 
 export type LeadStatus = 'NEW' | 'REVIEWED' | 'CONTACTED' | 'QUALIFIED' | 'DISQUALIFIED';
@@ -26,6 +27,7 @@ export interface SavedLead {
   savedAt: string;
   createdAt: string;
   updatedAt: string;
+  enrichment: EnrichmentView | null;
 }
 
 export interface SaveLeadPayload {

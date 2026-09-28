@@ -172,7 +172,7 @@ Swagger: mounted at `/docs`.
 ## L. Current search behavior
 
 - `POST /api/v1/search` with `{ query, governorate?, category?, minRating?, verifiedOnly? }` (DTO whitelists these — `city` is NOT a valid field and is rejected).
-- Provider selection (env): `SEARCH_PROVIDER=google-places` requires `GOOGLE_MAPS_API_KEY`; default = google-places if key present else mock. **Deployed env uses mock.**
+- Provider selection (env): unset or `SEARCH_PROVIDER=google-places` requires `GOOGLE_MAPS_API_KEY` (startup fails loudly when missing); `SEARCH_PROVIDER=mock` serves fabricated sample data and is rejected when `NODE_ENV=production`. A missing key never falls back to mock. **Deployed env must be switched to `google-places` with a real key.**
 - Mock provider: 9 hardcoded Egyptian businesses; Arabic category keywords (`مطعم/مطاعم`→restaurant, `عياد`→clinic, `أسنان`→dental-clinic, `مركز/مستشفى`→medical-center, …); explicit category filter must intersect with query-derived category; otherwise query must text-match `companyName`/`address`/`area`; `verifiedOnly` requires `VERIFIED`; governorate exact match; `minRating` applied. Unknown keyword → `[]` (real empty state).
 - Google provider: Places API (New) `searchText`, headers `X-Goog-Api-Key` + fieldmask, `includedType` map, timeout via `AbortSignal.timeout`, error mapping (timeout/429/5xx/etc. → 503 with `reason`).
 - Each search persists: job (RUNNING→COMPLETED/FAILED), execution (attempt 1, trigger MANUAL, metrics), raw import (byte-faithful `payload` JSON), and `SearchResult` rows atomically; provider call outside the transaction.

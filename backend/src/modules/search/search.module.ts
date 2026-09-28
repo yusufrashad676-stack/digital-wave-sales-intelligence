@@ -39,7 +39,11 @@ import { SearchController } from './presentation/controllers/search.controller.j
     {
       provide: SearchProviderPort,
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => createSearchProvider(config.getOrThrow<AppConfig['search']>('search')),
+      useFactory: (config: ConfigService) =>
+        createSearchProvider(
+          config.getOrThrow<AppConfig['search']>('search'),
+          config.getOrThrow<AppConfig['app']['nodeEnv']>('app.nodeEnv'),
+        ),
     },
     {
       provide: WebsiteEnrichmentPort,

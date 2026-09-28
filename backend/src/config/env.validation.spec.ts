@@ -9,7 +9,12 @@ const BASE_ENV = {
   DIRECT_DATABASE_URL: 'postgres://localhost:5432/db',
   JWT_SECRET: ACCESS_SECRET,
   JWT_REFRESH_SECRET: REFRESH_SECRET,
+  GOOGLE_MAPS_API_KEY: 'AIza-test-key',
 };
+
+function withoutGoogleKey(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return { ...BASE_ENV, GOOGLE_MAPS_API_KEY: undefined, ...overrides };
+}
 
 describe('validateEnv', () => {
   it('applies defaults for optional values', () => {
@@ -105,27 +110,89 @@ describe('validateEnv', () => {
     assert.equal(config.throttle.limit, 20);
   });
 
-  it('defaults the search provider to mock without a Google key', () => {
+  it('never selects the mock provider when SEARCH_PROVIDER and the Google key are both omitted', () => {
+    assert.throws(() => validateEnv(withoutGoogleKey()), /GOOGLE_MAPS_API_KEY is required/);
+  });
+
+  it('rejects google-places without an API key', () => {
+    assert.throws(
+      () => validateEnv(withoutGoogleKey({ SEARCH_PROVIDER: 'google-places' })),
+      /GOOGLE_MAPS_API_KEY is required/,
+    );
+  });
+
+  it('treats a blank Google key as missing rather than falling back to mock', () => {
+    assert.throws(
+      () => validateEnv(withoutGoogleKey({ GOOGLE_MAPS_API_KEY: '   ' })),
+      /GOOGLE_MAPS_API_KEY is required/,
+    );
+  });
+
+  it('selects google-places when a Google key is present', () => {
     const config = validateEnv(BASE_ENV);
-    assert.equal(config.search.provider, 'mock');
-    assert.equal(config.search.googleMapsApiKey, undefined);
+    assert.equal(config.search.provider, 'google-places');
+    assert.equal(config.search.googleMapsApiKey, 'AIza-test-key');
+  });
+
+  it('defaults SEARCH_PROVIDER to google-places when the Google key is present', () => {
+    const config = validateEnv(BASE_ENV);
+    assert.equal(config.search.provider, 'google-places');
     assert.equal(config.search.maxResults, 20);
     assert.equal(config.search.googleTimeoutMs, 5000);
   });
 
-  it('selects google-places when a Google key is present', () => {
-    const config = validateEnv({ ...BASE_ENV, GOOGLE_MAPS_API_KEY: 'AIza-test' });
-    assert.equal(config.search.provider, 'google-places');
-    assert.equal(config.search.googleMapsApiKey, 'AIza-test');
-  });
-
   it('forces the mock provider when SEARCH_PROVIDER=mock and a key is present', () => {
-    const config = validateEnv({ ...BASE_ENV, GOOGLE_MAPS_API_KEY: 'AIza-test', SEARCH_PROVIDER: 'mock' });
+    const config = validateEnv({ ...BASE_ENV, SEARCH_PROVIDER: 'mock' });
     assert.equal(config.search.provider, 'mock');
   });
 
+  it('allows SEARCH_PROVIDER=mock when NODE_ENV=development', () => {
+    const config = validateEnv(withoutGoogleKey({ SEARCH_PROVIDER: 'mock', NODE_ENV: 'development' }));
+    assert.equal(config.search.provider, 'mock');
+  });
+
+  it('allows SEARCH_PROVIDER=mock when NODE_ENV=test', () => {
+    const config = validateEnv(withoutGoogleKey({ SEARCH_PROVIDER: 'mock', NODE_ENV: 'test' }));
+    assert.equal(config.search.provider, 'mock');
+  });
+
+  it('rejects SEARCH_PROVIDER=mock when NODE_ENV=production', () => {
+    assert.throws(
+      () => validateEnv(withoutGoogleKey({ SEARCH_PROVIDER: 'mock', NODE_ENV: 'production' })),
+      /SEARCH_PROVIDER=mock is not allowed in production/,
+    );
+  });
+
+  it('rejects SEARCH_PROVIDER=mock in production even when a Google key is present', () => {
+    assert.throws(
+      () => validateEnv({ ...BASE_ENV, SEARCH_PROVIDER: 'mock', NODE_ENV: 'production' }),
+      /SEARCH_PROVIDER=mock is not allowed in production/,
+    );
+  });
+
+  it('allows the real provider in production when the Google key is present', () => {
+    const config = validateEnv({ ...BASE_ENV, NODE_ENV: 'production' });
+    assert.equal(config.search.provider, 'google-places');
+  });
+
+  it('rejects production without a Google key instead of degrading to mock', () => {
+    assert.throws(() => validateEnv(withoutGoogleKey({ NODE_ENV: 'production' })), /GOOGLE_MAPS_API_KEY is required/);
+  });
+
+  it('does not leak secret values in configuration errors', () => {
+    try {
+      validateEnv({ ...BASE_ENV, NODE_ENV: 'production', SEARCH_PROVIDER: 'mock' });
+      assert.fail('expected validation to reject mock in production');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      assert.ok(!message.includes('AIza-test-key'));
+      assert.ok(!message.includes(ACCESS_SECRET));
+      assert.ok(!message.includes(REFRESH_SECRET));
+    }
+  });
+
   it('parses SEARCH_PROVIDER case-insensitively', () => {
-    const config = validateEnv({ ...BASE_ENV, GOOGLE_MAPS_API_KEY: 'AIza-test', SEARCH_PROVIDER: 'Google-Places' });
+    const config = validateEnv({ ...BASE_ENV, SEARCH_PROVIDER: 'Google-Places' });
     assert.equal(config.search.provider, 'google-places');
   });
 
@@ -133,10 +200,14 @@ describe('validateEnv', () => {
     assert.throws(() => validateEnv({ ...BASE_ENV, SEARCH_PROVIDER: 'bing' }), /SEARCH_PROVIDER/);
   });
 
-  it('rejects google-places without an API key', () => {
+  it('rejects an unrecognised NODE_ENV instead of silently treating it as development', () => {
     assert.throws(
-      () => validateEnv({ ...BASE_ENV, SEARCH_PROVIDER: 'google-places' }),
-      /GOOGLE_MAPS_API_KEY is required/,
+      () => validateEnv({ ...BASE_ENV, SEARCH_PROVIDER: 'mock', NODE_ENV: 'prod' }),
+      /NODE_ENV must be one of/,
+    );
+    assert.throws(
+      () => validateEnv({ ...BASE_ENV, SEARCH_PROVIDER: 'mock', NODE_ENV: 'production ' }),
+      /NODE_ENV must be one of/,
     );
   });
 

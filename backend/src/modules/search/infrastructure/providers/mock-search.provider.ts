@@ -147,6 +147,14 @@ const ARABIC_CATEGORY_KEYWORDS: ReadonlyArray<{ keyword: string; category: strin
   { keyword: 'مستشفى', category: 'medical-center' },
 ];
 
+/**
+ * FABRICATED TEST/DEMO DATA — not a real business directory.
+ *
+ * Every record below is invented. This provider is only reachable when SEARCH_PROVIDER=mock is
+ * set explicitly and NODE_ENV is not production (enforced in env.validation.ts and again in
+ * search-provider.factory.ts). Results carry providerId "mock", which is persisted and returned
+ * in API responses so mock data is always identifiable downstream.
+ */
 @Injectable()
 export class MockSearchProvider implements SearchProviderPort {
   readonly providerId = 'mock';

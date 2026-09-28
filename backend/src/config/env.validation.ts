@@ -6,6 +6,8 @@ const JWT_ALGORITHMS: JwtAlgorithm[] = ['HS256', 'HS384', 'HS512'];
 
 const SEARCH_PROVIDERS: SearchProviderName[] = ['mock', 'google-places'];
 
+const DEFAULT_SEARCH_PROVIDER: SearchProviderName = 'google-places';
+
 const DEV_DEFAULT_ORIGINS = ['http://localhost:5173', 'http://localhost:3000'];
 
 const MIN_JWT_SECRET_LENGTH = 32;
@@ -52,18 +54,24 @@ function parseOriginList(value: string): string[] {
     .filter((origin) => origin.length > 0);
 }
 
-function parseNodeEnv(value: unknown): NodeEnv {
+function parseNodeEnv(value: unknown): { nodeEnv: NodeEnv; rejected?: string } {
   if (value === undefined || value === '') {
-    return 'development';
+    return { nodeEnv: 'development' };
   }
   const candidate = String(value);
-  return (NODE_ENVS as string[]).includes(candidate) ? (candidate as NodeEnv) : 'development';
+  if (!(NODE_ENVS as string[]).includes(candidate)) {
+    return { nodeEnv: 'development', rejected: candidate };
+  }
+  return { nodeEnv: candidate as NodeEnv };
 }
 
 export function validateEnv(config: Record<string, unknown>): AppConfig {
   const problems: string[] = [];
 
-  const nodeEnv = parseNodeEnv(config.NODE_ENV);
+  const { nodeEnv, rejected: rejectedNodeEnv } = parseNodeEnv(config.NODE_ENV);
+  if (rejectedNodeEnv !== undefined) {
+    problems.push(`NODE_ENV must be one of: ${NODE_ENVS.join(', ')} (received "${rejectedNodeEnv}")`);
+  }
 
   const port = toInteger(config.APP_PORT, 3000);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -145,9 +153,21 @@ export function validateEnv(config: Record<string, unknown>): AppConfig {
     problems.push(`SEARCH_PROVIDER must be one of: ${SEARCH_PROVIDERS.join(', ')}`);
   }
 
-  const searchProvider: SearchProviderName = normalizedSearchProvider ?? (googleMapsApiKey ? 'google-places' : 'mock');
+  // An unset SEARCH_PROVIDER means "use the real provider". A missing credential must
+  // never be inferred as mock — that would silently serve fabricated businesses.
+  const searchProvider: SearchProviderName = normalizedSearchProvider ?? DEFAULT_SEARCH_PROVIDER;
+
   if (searchProvider === 'google-places' && googleMapsApiKey === undefined) {
-    problems.push('GOOGLE_MAPS_API_KEY is required when SEARCH_PROVIDER is "google-places"');
+    problems.push(
+      'GOOGLE_MAPS_API_KEY is required when SEARCH_PROVIDER is "google-places" (and whenever SEARCH_PROVIDER is unset). ' +
+        'Mock data is never selected automatically — set SEARCH_PROVIDER=mock explicitly to use it outside production.',
+    );
+  }
+
+  if (searchProvider === 'mock' && nodeEnv === 'production') {
+    problems.push(
+      'SEARCH_PROVIDER=mock is not allowed in production. Set SEARCH_PROVIDER=google-places and configure GOOGLE_MAPS_API_KEY.',
+    );
   }
 
   const searchMaxResults = toInteger(config.SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS);

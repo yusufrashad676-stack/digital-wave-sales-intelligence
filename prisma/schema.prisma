@@ -547,6 +547,17 @@ model Company {
   anonymizedAt         DateTime?     @map("anonymized_at") @db.Timestamptz
   anonymizationTokenId String?       @map("anonymization_token_id") @db.VarChar(128)
   importSourceRef      String?       @map("import_source_ref") @db.VarChar(255)
+  // Canonical provider identity for companies discovered by search. At most one ACTIVE
+  // company per (import_source_id, provider_record_id), enforced by the partial unique
+  // index uq_companies_provider_identity_active (WHERE deleted_at IS NULL). Both columns
+  // are nullable: NULL means "not discovered from a provider" and NULLs stay distinct, so
+  // hand-curated companies are unaffected. This is provider identity only — it does NOT
+  // imply legal-entity or business-registration equivalence (see jurisdiction /
+  // registrationNumber / taxVatId). Legacy importSourceRef is intentionally not the
+  // identity mechanism and is left untouched.
+  importSourceId        String?       @map("import_source_id")
+  importSource          ImportSource? @relation(fields: [importSourceId], references: [id], onDelete: Restrict)
+  providerRecordId      String?       @map("provider_record_id") @db.VarChar(512)
 
   createdById String?   @map("created_by_id")
   createdBy   User?     @relation("CompanyCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
@@ -1343,6 +1354,7 @@ model ImportSource {
 
   executions SearchExecution[]
   rawImports RawImport[]
+  companies   Company[]
 
   @@index([category], map: "idx_import_sources_category")
   @@index([enabled], map: "idx_import_sources_enabled")
@@ -1453,8 +1465,11 @@ model RawImport {
   @@map("raw_imports")
 }
 
-// Normalized read model. companyId is an advisory basic-match link into the existing
-// canonical Company table (advisory matching only — never an auto-merge).
+// Normalized read model. companyId is a durable provider-identity link into the
+// canonical Company table: it is resolved deterministically from
+// (importSourceId, providerRecordId) (see uq_companies_provider_identity_active). This is
+// provider identity only — it does NOT imply legal-entity equivalence, and it is never an
+// auto-merge based on name/phone/website.
 model SearchResult {
   id                 String                         @id @default(uuid()) @map("id")
   executionId        String                         @map("execution_id")

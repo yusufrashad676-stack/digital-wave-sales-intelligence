@@ -80,6 +80,27 @@ export interface LocationEvidenceInput {
   observedAt: Date | string | null;
 }
 
+/**
+ * First-party website capability signals captured during enrichment and
+ * surfaced through the shared evidence read contract.
+ *
+ * These are positive-observation fields only. The snapshot format does not
+ * record whether the response body was actually parsed: a non-OK or empty
+ * HTTP response persists the same null/false defaults as a fully parsed page
+ * (see HttpWebsiteEnrichmentProvider). Consumers must therefore treat a null
+ * or false value as "not observed" rather than as proven absence.
+ */
+export interface WebsiteCapabilityObservation {
+  provider: string | null;
+  fetchedAt: Date | string | null;
+  reachable: boolean | null;
+  https: boolean | null;
+  contactPageUrl: string | null;
+  hasContactForm: boolean | null;
+  bookingPageUrl: string | null;
+  whatsappUrl: string | null;
+}
+
 export interface CompanyObservationInput {
   retrievedAt: Date | string | null;
   sourceUrl: string | null;
@@ -95,6 +116,7 @@ export interface CompanyObservationInput {
     profileUrl: string | null;
     verified: boolean;
   }>;
+  websiteCapabilities?: WebsiteCapabilityObservation | null;
 }
 
 export interface CompanyEvidenceBundle {

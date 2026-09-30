@@ -395,5 +395,91 @@ describe('PrismaCompanyEvidenceRepository', () => {
     assert.equal(bundle.observations[0].websiteCheckSucceeded, false);
     assert.equal(bundle.observations[0].websiteCheckFailed, false);
     assert.deepEqual(bundle.observations[0].socialChecks, []);
+    assert.equal(bundle.observations[0].websiteCapabilities, null);
+  });
+
+  it('surfaces website capability signals from the enrichment snapshot', async () => {
+    const row = companyRow({
+      searchResults: [
+        {
+          id: 'r-1',
+          providerId: 'google-maps',
+          retrievedAt: date('2026-05-01T00:00:00.000Z'),
+          sourceUrl: 'https://maps.example/place/acme',
+          websiteDomain: 'acme.example',
+          latitude: null,
+          longitude: null,
+          formattedAddress: null,
+          enrichmentSnapshot: {
+            website: {
+              title: 'Acme',
+              fetchedAt: '2026-05-01T00:00:00.000Z',
+              provider: 'http-website-enrichment',
+              reachable: true,
+              https: true,
+              contactPageUrl: 'https://acme.example/contact',
+              hasContactForm: true,
+              bookingPageUrl: 'https://acme.example/book',
+              whatsappUrl: 'https://wa.me/15550100',
+            },
+          },
+          deletedAt: null,
+        },
+      ],
+    });
+
+    const bundle = await repo([row]).loadCompanyEvidence(COMPANY_ID);
+    assert.ok(bundle !== null);
+    assert.deepEqual(bundle.observations[0].websiteCapabilities, {
+      provider: 'http-website-enrichment',
+      fetchedAt: '2026-05-01T00:00:00.000Z',
+      reachable: true,
+      https: true,
+      contactPageUrl: 'https://acme.example/contact',
+      hasContactForm: true,
+      bookingPageUrl: 'https://acme.example/book',
+      whatsappUrl: 'https://wa.me/15550100',
+    });
+  });
+
+  it('normalises empty capability values to null rather than exposing blank evidence', async () => {
+    const row = companyRow({
+      searchResults: [
+        {
+          id: 'r-1',
+          providerId: 'google-maps',
+          retrievedAt: date('2026-05-01T00:00:00.000Z'),
+          sourceUrl: null,
+          websiteDomain: 'acme.example',
+          latitude: null,
+          longitude: null,
+          formattedAddress: null,
+          enrichmentSnapshot: {
+            website: {
+              fetchedAt: '2026-05-01T00:00:00.000Z',
+              provider: 'http-website-enrichment',
+              reachable: 'yes',
+              contactPageUrl: '   ',
+              hasContactForm: 'true',
+              bookingPageUrl: '',
+            },
+          },
+          deletedAt: null,
+        },
+      ],
+    });
+
+    const bundle = await repo([row]).loadCompanyEvidence(COMPANY_ID);
+    assert.ok(bundle !== null);
+    assert.deepEqual(bundle.observations[0].websiteCapabilities, {
+      provider: 'http-website-enrichment',
+      fetchedAt: '2026-05-01T00:00:00.000Z',
+      reachable: null,
+      https: null,
+      contactPageUrl: null,
+      hasContactForm: null,
+      bookingPageUrl: null,
+      whatsappUrl: null,
+    });
   });
 });

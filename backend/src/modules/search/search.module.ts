@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppConfig } from '../../config/configuration.js';
+import { CompanyGapAnalysisService } from './application/services/company-gap-analysis.service.js';
 import { CompanyIntelligenceService } from './application/services/company-intelligence.service.js';
 import { EnrichmentEngine } from './application/services/enrichment-engine.js';
 import { CanonicalPromotionService } from './application/services/canonical-promotion.service.js';
 import { EnrichSearchResultsUseCase } from './application/use-cases/enrich-search-results.usecase.js';
+import { GetCompanyGapAnalysisUseCase } from './application/use-cases/get-company-gap-analysis.usecase.js';
 import { GetCompanyIntelligenceUseCase } from './application/use-cases/get-company-intelligence.usecase.js';
 import { GetExecutionUseCase } from './application/use-cases/get-execution.usecase.js';
 import { GetExecutionResultsUseCase } from './application/use-cases/get-execution-results.usecase.js';
@@ -86,6 +88,7 @@ import { SearchController } from './presentation/controllers/search.controller.j
     EnrichmentEngine,
     CanonicalPromotionService,
     CompanyIntelligenceService,
+    CompanyGapAnalysisService,
     SearchCompaniesUseCase,
     RunDiscoveryUseCase,
     GetSearchHistoryUseCase,
@@ -93,7 +96,8 @@ import { SearchController } from './presentation/controllers/search.controller.j
     GetExecutionUseCase,
     GetExecutionResultsUseCase,
     GetCompanyIntelligenceUseCase,
+    GetCompanyGapAnalysisUseCase,
   ],
-  exports: [EnrichmentEngine, ENRICHMENT_ENABLED, GetCompanyIntelligenceUseCase],
+  exports: [EnrichmentEngine, ENRICHMENT_ENABLED, GetCompanyIntelligenceUseCase, GetCompanyGapAnalysisUseCase],
 })
 export class SearchModule {}

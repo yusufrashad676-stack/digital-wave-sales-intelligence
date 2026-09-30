@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prisma/prisma.service.js';
-import { CompanyEvidenceBundle, CompanyObservationInput } from '../../domain/entities/company-intelligence.js';
+import {
+  CompanyEvidenceBundle,
+  CompanyObservationInput,
+  WebsiteCapabilityObservation,
+} from '../../domain/entities/company-intelligence.js';
 import { CompanyEvidenceRepository } from '../../domain/ports/company-evidence.repository.js';
 
 const PHONE_TYPE_CODE = 'phone';
@@ -168,6 +172,7 @@ function mapObservation(observed: {
     websiteCheckSucceeded: snapshot.website !== null,
     websiteCheckFailed: snapshot.websiteErrors.length > 0,
     websiteFetchedAt: snapshot.website?.fetchedAt ?? null,
+    websiteCapabilities: snapshot.capabilities,
     socialChecks:
       snapshot.socialProfiles?.map((profile) => ({
         platform: profile.platform,
@@ -178,9 +183,34 @@ function mapObservation(observed: {
 }
 
 interface ParsedSnapshot {
-  website: { fetchedAt: string } | null;
+  website: { fetchedAt: string; provider: string | null } | null;
   websiteErrors: Array<{ type: string }>;
   socialProfiles: Array<{ platform: string; profileUrl: string; verified: boolean }>;
+  capabilities: WebsiteCapabilityObservation | null;
+}
+
+function optionalString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value : null;
+}
+
+function optionalBoolean(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null;
+}
+
+function parseCapabilities(website: Record<string, unknown> | null): WebsiteCapabilityObservation | null {
+  if (website === null) {
+    return null;
+  }
+  return {
+    provider: optionalString(website.provider),
+    fetchedAt: optionalString(website.fetchedAt),
+    reachable: optionalBoolean(website.reachable),
+    https: optionalBoolean(website.https),
+    contactPageUrl: optionalString(website.contactPageUrl),
+    hasContactForm: optionalBoolean(website.hasContactForm),
+    bookingPageUrl: optionalString(website.bookingPageUrl),
+    whatsappUrl: optionalString(website.whatsappUrl),
+  };
 }
 
 /**
@@ -189,13 +219,13 @@ interface ParsedSnapshot {
  */
 function parseSnapshot(raw: unknown): ParsedSnapshot {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    return { website: null, websiteErrors: [], socialProfiles: [] };
+    return { website: null, websiteErrors: [], socialProfiles: [], capabilities: null };
   }
 
   const record = raw as Record<string, unknown>;
   const website = record.website;
-  const websiteFetchedAt =
-    typeof website === 'object' && website !== null ? (website as Record<string, unknown>).fetchedAt : undefined;
+  const websiteRecord = typeof website === 'object' && website !== null ? (website as Record<string, unknown>) : null;
+  const websiteFetchedAt = websiteRecord === null ? undefined : websiteRecord.fetchedAt;
 
   const errors = Array.isArray(record.errors) ? (record.errors as unknown[]) : [];
   const websiteErrors = errors
@@ -211,7 +241,9 @@ function parseSnapshot(raw: unknown): ParsedSnapshot {
 
   return {
     website:
-      websiteFetchedAt !== undefined && typeof websiteFetchedAt === 'string' ? { fetchedAt: websiteFetchedAt } : null,
+      websiteFetchedAt !== undefined && typeof websiteFetchedAt === 'string'
+        ? { fetchedAt: websiteFetchedAt, provider: optionalString(websiteRecord?.provider) }
+        : null,
     websiteErrors,
     socialProfiles: profiles
       .filter((profile): profile is Record<string, unknown> => typeof profile === 'object' && profile !== null)
@@ -220,5 +252,6 @@ function parseSnapshot(raw: unknown): ParsedSnapshot {
         profileUrl: typeof profile.profileUrl === 'string' ? profile.profileUrl : '',
         verified: profile.verified === true,
       })),
+    capabilities: parseCapabilities(websiteRecord),
   };
 }

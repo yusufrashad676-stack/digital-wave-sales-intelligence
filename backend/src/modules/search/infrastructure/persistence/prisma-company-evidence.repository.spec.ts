@@ -209,7 +209,11 @@ describe('PrismaCompanyEvidenceRepository', () => {
           longitude: null,
           formattedAddress: null,
           enrichmentSnapshot: {
-            website: { provider: 'http-website-enrichment', fetchedAt: '2026-05-01T00:00:00.000Z' },
+            website: {
+              provider: 'http-website-enrichment',
+              fetchedAt: '2026-05-01T00:00:00.000Z',
+              bodyAnalyzed: true,
+            },
             enrichedAt: '2026-05-01T00:00:00.001Z',
             enrichmentVersion: 1,
           },
@@ -225,6 +229,68 @@ describe('PrismaCompanyEvidenceRepository', () => {
     assert.equal(bundle.observations[0].websiteCheckSucceeded, true);
     assert.equal(bundle.observations[0].websiteCheckFailed, false);
     assert.equal(bundle.observations[0].websiteFetchedAt, '2026-05-01T00:00:00.000Z');
+  });
+
+  it('does not claim a successful website check when bodyAnalyzed is false', async () => {
+    const row = companyRow({
+      searchResults: [
+        {
+          id: 'r-1',
+          providerId: 'google-maps',
+          retrievedAt: date('2026-05-01T00:00:00.000Z'),
+          sourceUrl: 'https://maps.example/place/acme',
+          websiteDomain: 'acme.example',
+          latitude: null,
+          longitude: null,
+          formattedAddress: null,
+          enrichmentSnapshot: {
+            website: {
+              provider: 'http-website-enrichment',
+              fetchedAt: '2026-05-01T00:00:00.000Z',
+              bodyAnalyzed: false,
+            },
+            enrichedAt: '2026-05-01T00:00:00.001Z',
+            enrichmentVersion: 1,
+          },
+          deletedAt: null,
+        },
+      ],
+    });
+
+    const bundle = await repo([row]).loadCompanyEvidence(COMPANY_ID);
+    assert.ok(bundle !== null);
+    assert.equal(bundle.observations[0].websiteCheckSucceeded, false);
+    assert.equal(bundle.observations[0].websiteCheckFailed, false);
+    assert.equal(bundle.observations[0].websiteCapabilities?.bodyAnalyzed, false);
+  });
+
+  it('does not claim a successful website check for a historical snapshot without bodyAnalyzed', async () => {
+    const row = companyRow({
+      searchResults: [
+        {
+          id: 'r-1',
+          providerId: 'google-maps',
+          retrievedAt: date('2026-05-01T00:00:00.000Z'),
+          sourceUrl: 'https://maps.example/place/acme',
+          websiteDomain: 'acme.example',
+          latitude: null,
+          longitude: null,
+          formattedAddress: null,
+          enrichmentSnapshot: {
+            website: { provider: 'http-website-enrichment', fetchedAt: '2026-05-01T00:00:00.000Z' },
+            enrichedAt: '2026-05-01T00:00:00.001Z',
+            enrichmentVersion: 1,
+          },
+          deletedAt: null,
+        },
+      ],
+    });
+
+    const bundle = await repo([row]).loadCompanyEvidence(COMPANY_ID);
+    assert.ok(bundle !== null);
+    assert.equal(bundle.observations[0].websiteCheckSucceeded, false);
+    assert.equal(bundle.observations[0].websiteCheckFailed, false);
+    assert.equal(bundle.observations[0].websiteCapabilities?.bodyAnalyzed, null);
   });
 
   it('maps a failed website-check observation from enrichment errors', async () => {
@@ -433,6 +499,7 @@ describe('PrismaCompanyEvidenceRepository', () => {
     assert.deepEqual(bundle.observations[0].websiteCapabilities, {
       provider: 'http-website-enrichment',
       fetchedAt: '2026-05-01T00:00:00.000Z',
+      bodyAnalyzed: null,
       reachable: true,
       https: true,
       contactPageUrl: 'https://acme.example/contact',
@@ -458,6 +525,7 @@ describe('PrismaCompanyEvidenceRepository', () => {
             website: {
               fetchedAt: '2026-05-01T00:00:00.000Z',
               provider: 'http-website-enrichment',
+              bodyAnalyzed: 'yes',
               reachable: 'yes',
               contactPageUrl: '   ',
               hasContactForm: 'true',
@@ -474,6 +542,7 @@ describe('PrismaCompanyEvidenceRepository', () => {
     assert.deepEqual(bundle.observations[0].websiteCapabilities, {
       provider: 'http-website-enrichment',
       fetchedAt: '2026-05-01T00:00:00.000Z',
+      bodyAnalyzed: null,
       reachable: null,
       https: null,
       contactPageUrl: null,

@@ -179,7 +179,7 @@ function mapObservation(observed: {
     latitude: observed.latitude,
     longitude: observed.longitude,
     formattedAddress: observed.formattedAddress,
-    websiteCheckSucceeded: snapshot.website !== null,
+    websiteCheckSucceeded: snapshot.website !== null && snapshot.capabilities?.bodyAnalyzed === true,
     websiteCheckFailed: snapshot.websiteErrors.length > 0,
     websiteFetchedAt: snapshot.website?.fetchedAt ?? null,
     websiteCapabilities: snapshot.capabilities,
@@ -221,6 +221,7 @@ function parseCapabilities(website: Record<string, unknown> | null): WebsiteCapa
   return {
     provider: optionalString(website.provider),
     fetchedAt: optionalString(website.fetchedAt),
+    bodyAnalyzed: optionalBoolean(website.bodyAnalyzed),
     reachable: optionalBoolean(website.reachable),
     https: optionalBoolean(website.https),
     contactPageUrl: optionalString(website.contactPageUrl),

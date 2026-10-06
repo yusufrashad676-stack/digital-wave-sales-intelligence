@@ -140,6 +140,7 @@ describe('HttpWebsiteEnrichmentProvider', () => {
     assert.equal(result.data.title, null);
     assert.equal(result.data.description, null);
     assert.deepEqual(result.data.socialLinks, []);
+    assert.equal(result.data.bodyAnalyzed, true);
   });
 
   it('returns empty data on non-200 response', async () => {
@@ -155,6 +156,23 @@ describe('HttpWebsiteEnrichmentProvider', () => {
 
     assert.equal(result.data.title, null);
     assert.equal(result.data.description, null);
+    assert.equal(result.data.bodyAnalyzed, false);
+    assert.equal(result.data.fetchedAt !== undefined, true);
+  });
+
+  it('marks bodyAnalyzed false when the response carries no analyzable body', async () => {
+    const fetcher = async (url: string) => {
+      if (url.includes('robots.txt')) {
+        return mockTextResponse('User-agent: *\nAllow: /');
+      }
+      return mockHtmlResponse('');
+    };
+
+    const provider = new HttpWebsiteEnrichmentProvider(defaultOptions, fetcher);
+    const result = await provider.enrich({ domain: 'example.com', timeoutMs: 5000 });
+
+    assert.equal(result.data.bodyAnalyzed, false);
+    assert.equal(result.data.title, null);
   });
 
   it('throws EnrichmentTimeoutError on timeout', async () => {

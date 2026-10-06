@@ -135,7 +135,7 @@ describe('computeQualification', () => {
       { website: 'ANY', social: 'PRESENT' },
     );
     assert.equal(qualification.status, 'REJECTED');
-    assert.equal(qualification.social.observed, 'ABSENT');
+    assert.equal(qualification.social.observed, 'UNKNOWN');
   });
 
   it('REJECTED when ABSENT required but profiles found', () => {
@@ -146,12 +146,46 @@ describe('computeQualification', () => {
     assert.equal(qualification.status, 'REJECTED');
   });
 
-  it('QUALIFIED when ABSENT required and discovery ran with zero profiles', () => {
+  it('REJECTED when ABSENT required and zero profiles — absence is not proven', () => {
     const qualification = computeQualification(
       makeRow({ enrichmentStatus: 'ENRICHED', enrichmentSnapshot: socialSnapshot([]) }),
       { website: 'ANY', social: 'ABSENT' },
     );
-    assert.equal(qualification.status, 'QUALIFIED');
+    assert.equal(qualification.status, 'REJECTED');
+    assert.equal(qualification.social.observed, 'UNKNOWN');
+  });
+
+  it('REJECTED when ABSENT required and the website record is missing — observed UNKNOWN', () => {
+    const qualification = computeQualification(
+      makeRow({ websiteDomain: null, enrichmentStatus: 'PENDING', enrichmentSnapshot: null }),
+      { website: 'ABSENT', social: 'ANY' },
+    );
+    assert.equal(qualification.status, 'REJECTED');
+    assert.equal(qualification.website.observed, 'UNKNOWN');
+  });
+
+  it('no execution result ever reports an ABSENT observation', () => {
+    const snapshots: Array<EnrichmentSnapshot | null> = [
+      null,
+      socialSnapshot([]),
+      socialSnapshot([{ verified: true }]),
+      { enrichedAt: '2026-08-17T16:50:38.000Z', enrichmentVersion: 1 },
+    ];
+    const domains: Array<string | null> = [null, 'test.com'];
+    for (const website of ['ANY', 'PRESENT', 'ABSENT'] as const) {
+      for (const social of ['ANY', 'PRESENT', 'ABSENT'] as const) {
+        for (const enrichmentSnapshot of snapshots) {
+          for (const websiteDomain of domains) {
+            const qualification = computeQualification(makeRow({ websiteDomain, enrichmentSnapshot }), {
+              website,
+              social,
+            });
+            assert.notEqual(qualification.website.observed, 'ABSENT');
+            assert.notEqual(qualification.social.observed, 'ABSENT');
+          }
+        }
+      }
+    }
   });
 
   it('UNVERIFIED_SOCIAL when ABSENT required but social section missing (no false QUALIFIED)', () => {

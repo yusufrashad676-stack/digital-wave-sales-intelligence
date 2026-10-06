@@ -81,6 +81,16 @@ function hasFetchedPage(observation: CompanyObservationInput): boolean {
   return hasPageObservation(observation) && observation.websiteCapabilities?.fetchedAt !== null;
 }
 
+/**
+ * Positive proof that the capability scanner actually evaluated a response
+ * body. `fetchedAt` is deliberately NOT used here: it is written even when the
+ * fetch completed without an analyzable body, and a historical snapshot with no
+ * `bodyAnalyzed` marker is unknown, never analyzed.
+ */
+function hasAnalyzedPage(observation: CompanyObservationInput): boolean {
+  return hasPageObservation(observation) && observation.websiteCapabilities?.bodyAnalyzed === true;
+}
+
 function hasSocialDiscovery(observation: CompanyObservationInput): boolean {
   return observation.socialChecks.some((check) => {
     const profileUrl = check.profileUrl;
@@ -203,8 +213,11 @@ export class CompanyOpportunityAssessmentService {
 
   private capabilitiesComponent(gaps: CompanyGapAnalysis, bundle: CompanyEvidenceBundle): MaturityComponent {
     // Atomic: all three capabilities come from one first-party page observation,
-    // so the group is evaluable only when such an observation exists.
-    const evaluated = bundle.observations.some(hasFetchedPage);
+    // so the group is evaluable only when that body was actually analyzed.
+    // A persisted observation alone is not enough: a non-OK or empty response
+    // stores the same null/false capability defaults as a parsed page, and a
+    // historical snapshot carries no body-analysis marker.
+    const evaluated = bundle.observations.some(hasAnalyzedPage);
     const unitCount = CAPABILITY_UNITS;
     const satisfiedUnits = [GapDimension.BOOKING, GapDimension.CONTACT_CAPTURE, GapDimension.WHATSAPP].reduce(
       (count, dimension) =>

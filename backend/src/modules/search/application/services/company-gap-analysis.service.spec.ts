@@ -54,6 +54,7 @@ function observation(overrides: Partial<WebsiteCapabilityObservation> = {}): Com
     websiteCapabilities: {
       provider: 'http-website-enrichment',
       fetchedAt: FETCHED_AT,
+      bodyAnalyzed: true,
       reachable: true,
       https: true,
       contactPageUrl: null,
@@ -121,6 +122,7 @@ describe('CompanyGapAnalysisService', () => {
       websiteCapabilities: {
         provider: 'http-website-enrichment',
         fetchedAt: FETCHED_AT,
+        bodyAnalyzed: false,
         reachable: true,
         https: true,
         contactPageUrl: null,
@@ -347,5 +349,66 @@ describe('CompanyGapAnalysisService', () => {
         GapDimension.AI_USAGE,
       ],
     );
+  });
+});
+
+describe('company-gap-analysis — body-analysis metadata never implies absence (R6.1)', () => {
+  const service = new CompanyGapAnalysisService();
+
+  const NOT_OBSERVED_DIMENSIONS = [
+    GapDimension.BOOKING,
+    GapDimension.CONTACT_CAPTURE,
+    GapDimension.SOCIAL_PRESENCE,
+    GapDimension.WHATSAPP,
+  ];
+
+  for (const bodyAnalyzed of [true, false, null] as const) {
+    it(`U1: bodyAnalyzed=${String(bodyAnalyzed)} never yields MISSING or NOT_APPLICABLE`, () => {
+      const bundle = baseBundle();
+      bundle.observations.push(observation({ bodyAnalyzed }));
+      const analysis = service.build(bundle, NOW);
+      for (const gap of analysis.gaps) {
+        assert.notEqual(gap.state, GapState.MISSING, gap.dimension);
+        assert.notEqual(gap.state, GapState.NOT_APPLICABLE, gap.dimension);
+      }
+      for (const dimension of NOT_OBSERVED_DIMENSIONS) {
+        assert.equal(gapOf(analysis, dimension).state, GapState.UNKNOWN, dimension);
+      }
+    });
+  }
+
+  it('U2: a fully analyzed body with no detected capability is UNKNOWN, not MISSING', () => {
+    const bundle = baseBundle();
+    bundle.observations.push(observation({ bodyAnalyzed: true }));
+    const analysis = service.build(bundle, NOW);
+    for (const dimension of NOT_OBSERVED_DIMENSIONS) {
+      const gap = gapOf(analysis, dimension);
+      assert.equal(gap.state, GapState.UNKNOWN, dimension);
+      assert.equal(gap.reasonCode, GapReasonCode.ABSENCE_NOT_ADMISSIBLE, dimension);
+      if (dimension !== GapDimension.SOCIAL_PRESENCE) {
+        assert.ok(
+          gap.reason.includes('does not prove the capability is absent from the business or the site'),
+          `${dimension}: ${gap.reason}`,
+        );
+      }
+    }
+  });
+
+  it('U3: reason text no longer claims a completed scan based only on fetchedAt', () => {
+    const bundle = baseBundle();
+    bundle.observations.push(observation({ bodyAnalyzed: false }));
+    const gap = gapOf(service.build(bundle, NOW), GapDimension.WEBSITE);
+    assert.equal(gap.state, GapState.PRESENT);
+    assert.ok(!gap.reason.includes('completed'));
+  });
+
+  it('U4: gap analysis output shape and reason codes are unchanged', () => {
+    const bundle = baseBundle();
+    bundle.observations.push(observation({ bodyAnalyzed: true }));
+    const analysis = service.build(bundle, NOW);
+    for (const gap of analysis.gaps) {
+      assert.ok(Object.values(GapReasonCode).includes(gap.reasonCode));
+      assert.ok(gap.reason.trim().length > 0);
+    }
   });
 });

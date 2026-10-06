@@ -307,3 +307,81 @@ describe('CompanyIntelligenceService', () => {
     assert.deepEqual(first, new CompanyIntelligenceService().build(bundle, NOW));
   });
 });
+
+describe('CompanyIntelligenceService — website check SUCCESS vs UNKNOWN vs FAILED (R6.1)', () => {
+  const service = new CompanyIntelligenceService();
+
+  function bundleWithCheck(check: {
+    websiteCheckSucceeded: boolean;
+    websiteCheckFailed: boolean;
+    websiteFetchedAt: string | null;
+  }): CompanyEvidenceBundle {
+    const bundle = baseBundle();
+    bundle.websites.push({
+      domain: 'acme.example',
+      url: 'https://acme.example',
+      evidenceSource: 'http-website-enrichment',
+      evidenceUrl: 'https://acme.example',
+      observedAt: '2026-05-01T00:00:00.000Z',
+    });
+    bundle.observations.push({
+      retrievedAt: '2026-05-01T00:00:00.000Z',
+      sourceUrl: 'https://maps.example/place/acme',
+      websiteDomain: 'acme.example',
+      latitude: null,
+      longitude: null,
+      formattedAddress: null,
+      ...check,
+      socialChecks: [],
+    });
+    return bundle;
+  }
+
+  it('R4.1: a conclusive SUCCESS check yields VERIFIED and a success reason', () => {
+    const website = service.build(
+      bundleWithCheck({
+        websiteCheckSucceeded: true,
+        websiteCheckFailed: false,
+        websiteFetchedAt: '2026-05-01T00:00:00.000Z',
+      }),
+      NOW,
+    ).dimensions[FactualDimension.WEBSITE];
+    assert.equal(website.state, EvidenceState.VERIFIED);
+    assert.ok(website.reasons.join(' ').includes('page fetched successfully'));
+  });
+
+  it('R4.2: a snapshot with no conclusive check stays OBSERVED and never claims success', () => {
+    const website = service.build(
+      bundleWithCheck({ websiteCheckSucceeded: false, websiteCheckFailed: false, websiteFetchedAt: null }),
+      NOW,
+    ).dimensions[FactualDimension.WEBSITE];
+    assert.equal(website.state, EvidenceState.OBSERVED);
+    const joined = website.reasons.join(' ');
+    assert.ok(!joined.includes('page fetched successfully'), joined);
+    assert.ok(joined.includes('No website check outcome observed yet.'), joined);
+  });
+
+  it('R4.3: a failed check stays OBSERVED and claims neither success nor absence', () => {
+    const website = service.build(
+      bundleWithCheck({ websiteCheckSucceeded: false, websiteCheckFailed: true, websiteFetchedAt: null }),
+      NOW,
+    ).dimensions[FactualDimension.WEBSITE];
+    assert.equal(website.state, EvidenceState.OBSERVED);
+    const joined = website.reasons.join(' ');
+    assert.ok(!joined.includes('page fetched successfully'), joined);
+    assert.ok(joined.includes('not evidence of absence'), joined);
+  });
+
+  it('R4.4: UNKNOWN and FAILED remain distinguishable in the reported reasons', () => {
+    const unknown = service
+      .build(bundleWithCheck({ websiteCheckSucceeded: false, websiteCheckFailed: false, websiteFetchedAt: null }), NOW)
+      .dimensions[FactualDimension.WEBSITE].reasons.join(' ');
+    const failed = service
+      .build(bundleWithCheck({ websiteCheckSucceeded: false, websiteCheckFailed: true, websiteFetchedAt: null }), NOW)
+      .dimensions[FactualDimension.WEBSITE].reasons.join(' ');
+    assert.ok(unknown.includes('No website check outcome observed yet.'), unknown);
+    assert.ok(!unknown.includes('failed fetch'), unknown);
+    assert.ok(failed.includes('Website check failed'), failed);
+    assert.ok(!failed.includes('No website check outcome observed yet.'), failed);
+  });
+});

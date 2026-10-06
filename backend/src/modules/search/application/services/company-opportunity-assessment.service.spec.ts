@@ -64,6 +64,7 @@ function observation(overrides: Partial<WebsiteCapabilityObservation> = {}): Com
     websiteCapabilities: {
       provider: 'http-website-enrichment',
       fetchedAt: FETCHED_AT,
+      bodyAnalyzed: true,
       reachable: true,
       https: true,
       contactPageUrl: null,
@@ -390,7 +391,7 @@ describe('CompanyOpportunityAssessmentService — state treatment', () => {
 
   it('C6: FAILED observations contribute no maturity', () => {
     const bundle = baseBundle();
-    const failed = observation({ fetchedAt: null });
+    const failed = observation({ fetchedAt: null, bodyAnalyzed: false });
     failed.websiteCheckSucceeded = false;
     failed.websiteCheckFailed = true;
     failed.websiteFetchedAt = null;
@@ -465,6 +466,82 @@ describe('CompanyOpportunityAssessmentService — coverage and confidence', () =
     assert.equal(Object.keys(result.opportunity).includes('confidenceBand'), false);
     assert.equal(Object.keys(result.opportunity).includes('coverage'), false);
     assert.equal(Object.keys(result.opportunity).includes('maturity'), false);
+  });
+});
+
+describe('CompanyOpportunityAssessmentService — body-analysis evaluability (R6.1)', () => {
+  function capabilitiesOf(result: ReturnType<typeof service.build>) {
+    const component = result.maturity.components.find((entry) => entry.group === ScoreGroup.CAPABILITIES);
+    assert.ok(component);
+    return component;
+  }
+
+  function groupOf(result: ReturnType<typeof service.build>, group: ScoreGroup) {
+    const component = result.maturity.components.find((entry) => entry.group === group);
+    assert.ok(component);
+    return component;
+  }
+
+  function bundleWith(bodyAnalyzed: boolean | null): CompanyEvidenceBundle {
+    const bundle = baseBundle();
+    addWebsite(bundle);
+    bundle.observations.push(observation({ bookingPageUrl: 'https://acme.example/book', bodyAnalyzed }));
+    return bundle;
+  }
+
+  it('I1: an analyzed body makes the capability group evaluable', () => {
+    const bundle = bundleWith(true);
+    const result = service.build(bundle, realGaps(bundle), realQuality(bundle), NOW);
+    assert.equal(capabilitiesOf(result).evaluated, true);
+    assert.equal(result.coverage.value, 80);
+  });
+
+  it('I2: bodyAnalyzed false is not evaluable even though fetchedAt is present', () => {
+    const bundle = bundleWith(false);
+    assert.equal(bundle.observations[0]?.websiteCapabilities?.fetchedAt, FETCHED_AT);
+    const result = service.build(bundle, realGaps(bundle), realQuality(bundle), NOW);
+    assert.equal(capabilitiesOf(result).evaluated, false);
+    assert.equal(result.coverage.value, 30);
+  });
+
+  it('I3: a historical observation with no bodyAnalyzed marker is not evaluable', () => {
+    const bundle = bundleWith(null);
+    const result = service.build(bundle, realGaps(bundle), realQuality(bundle), NOW);
+    assert.equal(capabilitiesOf(result).evaluated, false);
+    assert.equal(result.coverage.value, 30);
+  });
+
+  it('I4: coverage and confidence drop for an unanalyzed body while maturity and opportunity stay identical', () => {
+    const analyzedBundle = bundleWith(true);
+    const unanalyzedBundle = bundleWith(false);
+    const analyzed = service.build(analyzedBundle, realGaps(analyzedBundle), realQuality(analyzedBundle), NOW);
+    const unanalyzed = service.build(unanalyzedBundle, realGaps(unanalyzedBundle), realQuality(unanalyzedBundle), NOW);
+
+    assert.equal(analyzed.coverage.value, 80);
+    assert.equal(analyzed.coverage.confidenceBand, ConfidenceBand.HIGH);
+    assert.equal(unanalyzed.coverage.value, 30);
+    assert.equal(unanalyzed.coverage.confidenceBand, ConfidenceBand.LOW);
+
+    assert.equal(unanalyzed.maturity.score, analyzed.maturity.score);
+    assert.equal(unanalyzed.opportunity.state, analyzed.opportunity.state);
+    assert.equal(unanalyzed.opportunity.reasonCode, analyzed.opportunity.reasonCode);
+    assert.equal(unanalyzed.opportunity.provenGapCount, analyzed.opportunity.provenGapCount);
+    assert.equal(unanalyzed.opportunity.provenGapCount, 0);
+  });
+
+  it('I5: G_FOUNDATION and G_SOCIAL evaluability do not depend on bodyAnalyzed', () => {
+    const bundle = baseBundle();
+    addWebsite(bundle);
+    addSocial(bundle);
+    bundle.observations.push(observation({ bodyAnalyzed: false }));
+    const result = service.build(bundle, realGaps(bundle), realQuality(bundle), NOW);
+
+    assert.equal(groupOf(result, ScoreGroup.FOUNDATION).evaluated, true);
+    assert.equal(groupOf(result, ScoreGroup.SOCIAL).evaluated, true);
+    assert.equal(groupOf(result, ScoreGroup.CAPABILITIES).evaluated, false);
+    assert.equal(result.coverage.value, 50);
+    assert.equal(result.maturity.score, 50);
+    assert.equal(result.opportunity.state, OpportunityState.UNDETERMINED);
   });
 });
 

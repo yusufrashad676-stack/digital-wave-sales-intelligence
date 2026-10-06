@@ -17,11 +17,13 @@ import {
 
 /**
  * Shared epistemic caveat appended to every "not observed" reason. The
- * enrichment snapshot cannot distinguish "page parsed, capability absent" from
- * "page not parsed, capability unknown", so absence is never admissible.
+ * snapshot records whether one response body was analyzed (`bodyAnalyzed`),
+ * but analyzing a single first-party page still cannot establish that a
+ * capability is absent from the business or from the rest of the site, so
+ * absence is never admissible.
  */
 const ABSENCE_LIMITATION =
-  'The enrichment snapshot does not record whether the response body was parsed, and a non-OK or empty response persists the same empty values, so a not-observed value is never treated as proven absence.';
+  'A not-observed value means only that one response body did not show the capability; even a fully analyzed body does not prove the capability is absent from the business or the site, and a non-OK or empty response persists the same empty values.';
 
 const NON_EVALUABLE_DIMENSIONS: readonly GapDimension[] = [
   GapDimension.CRM_SYSTEM,
@@ -186,7 +188,7 @@ export class CompanyGapAnalysisService {
     }
     return present(
       GapDimension.WEBSITE,
-      'A website was observed in canonical records or in a completed first-party enrichment observation.',
+      'A website was observed in canonical records or in a first-party website observation.',
       references,
     );
   }

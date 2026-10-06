@@ -84,15 +84,21 @@ export interface LocationEvidenceInput {
  * First-party website capability signals captured during enrichment and
  * surfaced through the shared evidence read contract.
  *
- * These are positive-observation fields only. The snapshot format does not
- * record whether the response body was actually parsed: a non-OK or empty
- * HTTP response persists the same null/false defaults as a fully parsed page
- * (see HttpWebsiteEnrichmentProvider). Consumers must therefore treat a null
- * or false value as "not observed" rather than as proven absence.
+ * These are positive-observation fields only. `bodyAnalyzed` records whether
+ * the fetched response body was actually obtained and evaluated by the
+ * capability scanner: `true` proves analysis of that one body, `false` means
+ * the fetch completed without an analyzable body (non-OK or empty response),
+ * and `null` is historical/unknown. `fetchedAt` is NOT evidence of analysis —
+ * it is set even when no body was obtained.
+ *
+ * Consumers must treat a null or false value as "not observed" rather than as
+ * proven absence: analyzing one page never proves a capability is absent from
+ * the business or the site.
  */
 export interface WebsiteCapabilityObservation {
   provider: string | null;
   fetchedAt: Date | string | null;
+  bodyAnalyzed: boolean | null;
   reachable: boolean | null;
   https: boolean | null;
   contactPageUrl: string | null;

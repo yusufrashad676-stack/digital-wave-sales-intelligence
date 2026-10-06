@@ -28,17 +28,18 @@ function criteria(overrides: Partial<SearchIntentCriteria> = {}): SearchIntentCr
 }
 
 describe('qualifyResults', () => {
-  it('website ABSENT keeps businesses without website', () => {
+  it('website ABSENT is never satisfied by a missing website record (observed UNKNOWN)', () => {
     const results = qualifyResults([result({ website: null })], criteria({ website: 'ABSENT' }));
     assert.equal(results.length, 1);
-    assert.equal(results[0]?.qualification.status, 'QUALIFIED');
-    assert.equal(results[0]?.qualification.website.observed, 'ABSENT');
+    assert.equal(results[0]?.qualification.status, 'REJECTED');
+    assert.equal(results[0]?.qualification.website.observed, 'UNKNOWN');
   });
 
   it('website ABSENT rejects businesses with website', () => {
     const results = qualifyResults([result({ website: 'https://example.com' })], criteria({ website: 'ABSENT' }));
     assert.equal(results.length, 1);
     assert.equal(results[0]?.qualification.status, 'REJECTED');
+    assert.equal(results[0]?.qualification.website.observed, 'PRESENT');
   });
 
   it('website PRESENT keeps businesses with website', () => {
@@ -52,6 +53,7 @@ describe('qualifyResults', () => {
     const results = qualifyResults([result({ website: null })], criteria({ website: 'PRESENT' }));
     assert.equal(results.length, 1);
     assert.equal(results[0]?.qualification.status, 'REJECTED');
+    assert.equal(results[0]?.qualification.website.observed, 'UNKNOWN');
   });
 
   it('website ANY keeps all businesses', () => {
@@ -60,6 +62,15 @@ describe('qualifyResults', () => {
     const results = qualifyResults([withWeb, withoutWeb], criteria({ website: 'ANY' }));
     assert.equal(results.length, 2);
     assert.ok(results.every((r) => r.qualification.status === 'QUALIFIED'));
+  });
+
+  it('website observed is never ABSENT for any input — absence is never admissible', () => {
+    for (const website of [null, '', 'https://example.com']) {
+      for (const requested of ['ANY', 'PRESENT', 'ABSENT'] as const) {
+        const results = qualifyResults([result({ website })], criteria({ website: requested }));
+        assert.equal(results[0]?.qualification.website.observed !== 'ABSENT', true, `website=${website}`);
+      }
+    }
   });
 
   it('social PRESENT returns UNVERIFIED_SOCIAL', () => {
@@ -191,14 +202,14 @@ describe('requalifyWithEnrichment', () => {
     assert.equal(requalified.qualification.social.observed, 'PRESENT');
   });
 
-  it('social PRESENT + no profiles found → REJECTED', () => {
+  it('social PRESENT + no profiles found → REJECTED with observed UNKNOWN', () => {
     const result = qualifiedResult();
     const snapshot = snapshotWith({
       social: { profiles: [], discoveredAt: new Date().toISOString(), provider: 'http-social-discovery' },
     });
     const requalified = requalifyWithEnrichment(result, snapshot);
     assert.equal(requalified.qualification.status, 'REJECTED');
-    assert.equal(requalified.qualification.social.observed, 'ABSENT');
+    assert.equal(requalified.qualification.social.observed, 'UNKNOWN');
   });
 
   it('social ABSENT + profiles found → REJECTED', () => {
@@ -230,7 +241,7 @@ describe('requalifyWithEnrichment', () => {
     assert.equal(requalified.qualification.social.observed, 'PRESENT');
   });
 
-  it('social ABSENT + no profiles found → QUALIFIED', () => {
+  it('social ABSENT + no profiles found → REJECTED, absence is not proven', () => {
     const result = qualifiedResult({
       qualification: {
         website: { requested: 'PRESENT', observed: 'PRESENT', source: 'google-places' },
@@ -243,8 +254,8 @@ describe('requalifyWithEnrichment', () => {
       social: { profiles: [], discoveredAt: new Date().toISOString(), provider: 'http-social-discovery' },
     });
     const requalified = requalifyWithEnrichment(result, snapshot);
-    assert.equal(requalified.qualification.status, 'QUALIFIED');
-    assert.equal(requalified.qualification.social.observed, 'ABSENT');
+    assert.equal(requalified.qualification.status, 'REJECTED');
+    assert.equal(requalified.qualification.social.observed, 'UNKNOWN');
   });
 
   it('social ANY → always QUALIFIED regardless of enrichment', () => {
@@ -293,11 +304,31 @@ describe('requalifyWithEnrichment', () => {
     assert.equal(r2.qualification.status, 'REJECTED');
   });
 
-  it('enrichment snapshot missing social data → treated as not found', () => {
+  it('enrichment snapshot missing social data → treated as unknown, never ABSENT', () => {
     const result = qualifiedResult();
     const requalified = requalifyWithEnrichment(result, null);
     assert.equal(requalified.qualification.status, 'REJECTED');
-    assert.equal(requalified.qualification.social.observed, 'ABSENT');
+    assert.equal(requalified.qualification.social.observed, 'UNKNOWN');
+  });
+
+  it('social observed is never ABSENT for any enrichment outcome', () => {
+    const empty = snapshotWith({
+      social: { profiles: [], discoveredAt: new Date().toISOString(), provider: 'http-social-discovery' },
+    });
+    for (const requested of ['ANY', 'PRESENT', 'ABSENT'] as const) {
+      const base = qualifiedResult({
+        qualification: {
+          website: { requested: 'PRESENT', observed: 'PRESENT', source: 'google-places' },
+          social: { requested, observed: 'UNKNOWN', source: null },
+          status: 'UNVERIFIED_SOCIAL',
+          reason: 'Social presence requires enrichment',
+        },
+      });
+      for (const snapshot of [null, empty]) {
+        const requalified = requalifyWithEnrichment(base, snapshot);
+        assert.notEqual(requalified.qualification.social.observed, 'ABSENT', `requested=${requested}`);
+      }
+    }
   });
 
   it('multiple platforms: at least one verified → QUALIFIED for PRESENT', () => {

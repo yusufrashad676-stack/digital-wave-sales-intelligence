@@ -1,14 +1,23 @@
 import type { NormalizedSearchResult } from '../../domain/entities/normalized-search-result.js';
 import type { CriteriaValue, SearchIntentCriteria } from '../../domain/entities/search-intent.js';
-import type { QualifiedResult, ResultQualification } from '../../domain/entities/discovery-run.js';
+import type { ObservedValue, QualifiedResult, ResultQualification } from '../../domain/entities/discovery-run.js';
 import type { EnrichmentSnapshot } from '../../domain/entities/enrichment-snapshot.js';
 
-function observeWebsite(website: string | null): 'PRESENT' | 'ABSENT' {
-  return website !== null && website.length > 0 ? 'PRESENT' : 'ABSENT';
+/**
+ * A missing provider website field is absence of evidence, not evidence of
+ * absence, so it observes UNKNOWN. ABSENT has no runtime producer: nothing in
+ * the pipeline conclusively proves a business has no website.
+ */
+function observeWebsite(website: string | null): ObservedValue {
+  return website !== null && website.length > 0 ? 'PRESENT' : 'UNKNOWN';
 }
 
-function matchWebsiteCriteria(observed: 'PRESENT' | 'ABSENT', requested: CriteriaValue): boolean {
+/**
+ * UNKNOWN neither satisfies nor contradicts a requested criterion.
+ */
+function matchWebsiteCriteria(observed: ObservedValue, requested: CriteriaValue): boolean {
   if (requested === 'ANY') return true;
+  if (observed === 'UNKNOWN') return false;
   return observed === requested;
 }
 
@@ -103,9 +112,9 @@ export function requalifyWithEnrichment(result: QualifiedResult, snapshot: Enric
       ...result,
       qualification: {
         ...result.qualification,
-        social: { requested: 'PRESENT', observed: 'ABSENT', source: 'enrichment' },
+        social: { requested: 'PRESENT', observed: 'UNKNOWN', source: 'enrichment' },
         status: 'REJECTED',
-        reason: 'Social presence required but none found via enrichment',
+        reason: 'Social presence required but enrichment produced no conclusive social evidence',
       },
     };
   }
@@ -126,9 +135,9 @@ export function requalifyWithEnrichment(result: QualifiedResult, snapshot: Enric
     ...result,
     qualification: {
       ...result.qualification,
-      social: { requested: 'ABSENT', observed: 'ABSENT', source: 'enrichment' },
-      status: 'QUALIFIED',
-      reason: 'No social profiles found as required',
+      social: { requested: 'ABSENT', observed: 'UNKNOWN', source: 'enrichment' },
+      status: 'REJECTED',
+      reason: 'Social absence required but enrichment cannot prove absence; no profiles found is not proof',
     },
   };
 }

@@ -12,6 +12,18 @@ export interface WebsiteEnrichmentData {
   socialLinks: string[];
   fetchedAt: string;
   provider: string;
+  /**
+   * Scan-completion marker for this one fetched body.
+   *
+   * true  — the response body was obtained AND the capability scanner evaluated that body.
+   * false — the fetch path completed without an analyzable body (non-OK response or empty body).
+   * absent — historical snapshot; the outcome is unknown.
+   *
+   * Deliberately narrow: it says nothing about a site-wide crawl, a global
+   * capability inventory, website health, SEO, or whether a capability is absent.
+   * It never defaults to true.
+   */
+  bodyAnalyzed?: boolean;
   emails?: string[];
   reachable?: boolean;
   https?: boolean;

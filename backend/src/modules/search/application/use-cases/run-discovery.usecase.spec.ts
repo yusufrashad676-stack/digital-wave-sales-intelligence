@@ -163,10 +163,13 @@ describe('RunDiscoveryUseCase', () => {
     assert.equal(runResult.results.length, 2);
     const qualified = runResult.results.filter((r) => r.qualification.status === 'QUALIFIED');
     const rejected = runResult.results.filter((r) => r.qualification.status === 'REJECTED');
-    assert.equal(qualified.length, 1);
-    assert.equal(rejected.length, 1);
-    assert.equal(qualified[0]?.website, null);
-    assert.equal(rejected[0]?.website, 'https://example.com');
+    assert.equal(qualified.length, 0, 'absence is never proven by a missing provider field');
+    assert.equal(rejected.length, 2);
+    assert.equal(runResult.summary.qualified, 0);
+    assert.equal(runResult.summary.rejected, 2);
+    const without = rejected.find((r) => r.providerRecordId === 'p2');
+    assert.equal(without?.website, null);
+    assert.equal(without?.qualification.website.observed, 'UNKNOWN');
   });
 
   it('returns UNVERIFIED_SOCIAL when social criteria is PRESENT', async () => {
@@ -251,10 +254,11 @@ describe('RunDiscoveryUseCase', () => {
     const qualified = runResult.results.filter((r) => r.qualification.status === 'QUALIFIED');
     const unverified = runResult.results.filter((r) => r.qualification.status === 'UNVERIFIED_SOCIAL');
     const rejected = runResult.results.filter((r) => r.qualification.status === 'REJECTED');
-    assert.equal(unverified.length, 1);
-    assert.equal(unverified[0]?.website, null);
-    assert.equal(qualified.length, 0);
-    assert.equal(rejected.length, 1);
-    assert.equal(rejected[0]?.website, 'https://example.com');
+    assert.equal(unverified.length, 0, 'a website criterion that cannot be proven blocks qualification');
+    assert.equal(qualified.length, 0, 'UNKNOWN never satisfies an ABSENT website criterion');
+    assert.equal(rejected.length, 2);
+    assert.ok(rejected.every((r) => r.qualification.website.observed !== 'ABSENT'));
+    assert.equal(rejected.find((r) => r.providerRecordId === 'p2')?.qualification.website.observed, 'UNKNOWN');
+    assert.equal(rejected.find((r) => r.providerRecordId === 'p1')?.qualification.website.observed, 'PRESENT');
   });
 });

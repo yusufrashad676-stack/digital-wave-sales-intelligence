@@ -61,6 +61,7 @@ const EVIDENCE: CompanyEvidenceBundle = {
       websiteCapabilities: {
         provider: 'http-website-enrichment',
         fetchedAt: FETCHED_AT,
+        bodyAnalyzed: true,
         reachable: true,
         https: true,
         contactPageUrl: null,

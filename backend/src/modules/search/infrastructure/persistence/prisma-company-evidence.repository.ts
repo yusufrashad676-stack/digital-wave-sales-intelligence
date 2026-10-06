@@ -83,6 +83,11 @@ export class PrismaCompanyEvidenceRepository implements CompanyEvidenceRepositor
             longitude: true,
             formattedAddress: true,
             enrichmentSnapshot: true,
+            rating: true,
+            ratingCount: true,
+            category: true,
+            area: true,
+            verificationStatus: true,
           },
         },
       },
@@ -159,6 +164,11 @@ function mapObservation(observed: {
   longitude: number | null;
   formattedAddress: string | null;
   enrichmentSnapshot: unknown;
+  rating?: number | null;
+  ratingCount?: number | null;
+  category?: string | null;
+  area?: string | null;
+  verificationStatus?: string | null;
 }): CompanyObservationInput {
   const snapshot = parseSnapshot(observed.enrichmentSnapshot);
 
@@ -173,6 +183,13 @@ function mapObservation(observed: {
     websiteCheckFailed: snapshot.websiteErrors.length > 0,
     websiteFetchedAt: snapshot.website?.fetchedAt ?? null,
     websiteCapabilities: snapshot.capabilities,
+    commercial: {
+      rating: observed.rating ?? null,
+      ratingCount: observed.ratingCount ?? null,
+      category: observed.category ?? null,
+      area: observed.area ?? null,
+      verificationStatus: observed.verificationStatus ?? null,
+    },
     socialChecks:
       snapshot.socialProfiles?.map((profile) => ({
         platform: profile.platform,

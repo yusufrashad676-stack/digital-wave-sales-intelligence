@@ -482,4 +482,74 @@ describe('PrismaCompanyEvidenceRepository', () => {
       whatsappUrl: null,
     });
   });
+
+  it('maps commercial business signals onto the observation without touching evidence', async () => {
+    const row = companyRow({
+      searchResults: [
+        {
+          id: 'r-1',
+          providerId: 'google-maps',
+          retrievedAt: date('2026-05-01T00:00:00.000Z'),
+          sourceUrl: 'https://maps.example/place/acme',
+          websiteDomain: 'acme.example',
+          latitude: null,
+          longitude: null,
+          formattedAddress: null,
+          enrichmentSnapshot: null,
+          rating: 4.7,
+          ratingCount: 264,
+          category: 'clinic',
+          area: 'New Cairo',
+          verificationStatus: 'UNKNOWN',
+          deletedAt: null,
+        },
+      ],
+    });
+
+    const bundle = await repo([row]).loadCompanyEvidence(COMPANY_ID);
+    assert.ok(bundle !== null);
+    assert.deepEqual(bundle.observations[0].commercial, {
+      rating: 4.7,
+      ratingCount: 264,
+      category: 'clinic',
+      area: 'New Cairo',
+      verificationStatus: 'UNKNOWN',
+    });
+    assert.equal(bundle.observations[0].websiteCapabilities, null);
+    assert.equal(bundle.observations[0].websiteFetchedAt, null);
+  });
+
+  it('defaults every commercial field to null rather than inventing zeros or blanks', async () => {
+    const row = companyRow({
+      searchResults: [
+        {
+          id: 'r-1',
+          providerId: 'google-maps',
+          retrievedAt: date('2026-05-01T00:00:00.000Z'),
+          sourceUrl: null,
+          websiteDomain: null,
+          latitude: null,
+          longitude: null,
+          formattedAddress: null,
+          enrichmentSnapshot: null,
+          rating: null,
+          ratingCount: null,
+          category: null,
+          area: null,
+          verificationStatus: null,
+          deletedAt: null,
+        },
+      ],
+    });
+
+    const bundle = await repo([row]).loadCompanyEvidence(COMPANY_ID);
+    assert.ok(bundle !== null);
+    assert.deepEqual(bundle.observations[0].commercial, {
+      rating: null,
+      ratingCount: null,
+      category: null,
+      area: null,
+      verificationStatus: null,
+    });
+  });
 });

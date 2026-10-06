@@ -101,6 +101,21 @@ export interface WebsiteCapabilityObservation {
   whatsappUrl: string | null;
 }
 
+/**
+ * Provider commercial signals observed alongside a discovery result.
+ *
+ * Read-only context: never an input to R4 verification, R5 gap states, or any
+ * R6 computation. Exposed so consumers can see them without inferring
+ * capability or opportunity from them.
+ */
+export interface CommercialObservation {
+  rating: number | null;
+  ratingCount: number | null;
+  category: string | null;
+  area: string | null;
+  verificationStatus: string | null;
+}
+
 export interface CompanyObservationInput {
   retrievedAt: Date | string | null;
   sourceUrl: string | null;
@@ -117,6 +132,7 @@ export interface CompanyObservationInput {
     verified: boolean;
   }>;
   websiteCapabilities?: WebsiteCapabilityObservation | null;
+  commercial?: CommercialObservation | null;
 }
 
 export interface CompanyEvidenceBundle {

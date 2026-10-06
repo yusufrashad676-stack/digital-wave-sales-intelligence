@@ -621,4 +621,184 @@ describe('PrismaCompanyEvidenceRepository', () => {
       verificationStatus: null,
     });
   });
+
+  it('maps the R6.2 root-website HTTP observation from the enrichment snapshot', async () => {
+    const row = companyRow({
+      searchResults: [
+        {
+          id: 'r-1',
+          providerId: 'google-maps',
+          retrievedAt: date('2026-05-01T00:00:00.000Z'),
+          sourceUrl: 'https://maps.example/place/acme',
+          websiteDomain: 'acme.example',
+          latitude: null,
+          longitude: null,
+          formattedAddress: null,
+          enrichmentSnapshot: {
+            website: {
+              provider: 'http-website-enrichment',
+              fetchedAt: '2026-05-01T00:00:00.000Z',
+              bodyAnalyzed: false,
+              httpStatus: 500,
+              httpRedirected: false,
+              httpFinalUrl: 'https://acme.example',
+              httpFinalSameOrigin: true,
+            },
+            enrichedAt: '2026-05-01T00:00:00.001Z',
+            enrichmentVersion: 1,
+          },
+          deletedAt: null,
+        },
+      ],
+    });
+
+    const bundle = await repo([row]).loadCompanyEvidence(COMPANY_ID);
+    assert.ok(bundle !== null);
+    assert.deepEqual(bundle.observations[0].websiteHttp, {
+      httpStatus: 500,
+      httpRedirected: false,
+      httpFinalUrl: 'https://acme.example',
+      httpFinalSameOrigin: true,
+    });
+    assert.equal(bundle.observations[0].websiteCheckSucceeded, false);
+    assert.equal(bundle.observations[0].websiteCapabilities?.bodyAnalyzed, false);
+  });
+
+  it('maps a 404 snapshot with redirect metadata independently of capability analysis', async () => {
+    const row = companyRow({
+      searchResults: [
+        {
+          id: 'r-1',
+          providerId: 'google-maps',
+          retrievedAt: date('2026-05-01T00:00:00.000Z'),
+          sourceUrl: null,
+          websiteDomain: 'acme.example',
+          latitude: null,
+          longitude: null,
+          formattedAddress: null,
+          enrichmentSnapshot: {
+            website: {
+              provider: 'http-website-enrichment',
+              fetchedAt: '2026-05-01T00:00:00.000Z',
+              httpStatus: 404,
+              httpRedirected: true,
+              httpFinalUrl: 'https://acme.example/',
+              httpFinalSameOrigin: true,
+            },
+            enrichedAt: '2026-05-01T00:00:00.001Z',
+            enrichmentVersion: 1,
+          },
+          deletedAt: null,
+        },
+      ],
+    });
+
+    const bundle = await repo([row]).loadCompanyEvidence(COMPANY_ID);
+    assert.ok(bundle !== null);
+    assert.deepEqual(bundle.observations[0].websiteHttp, {
+      httpStatus: 404,
+      httpRedirected: true,
+      httpFinalUrl: 'https://acme.example/',
+      httpFinalSameOrigin: true,
+    });
+  });
+
+  it('maps historical snapshots without R6.2 fields to null, never fabricating metadata', async () => {
+    const row = companyRow({
+      searchResults: [
+        {
+          id: 'r-1',
+          providerId: 'google-maps',
+          retrievedAt: date('2026-05-01T00:00:00.000Z'),
+          sourceUrl: null,
+          websiteDomain: 'acme.example',
+          latitude: null,
+          longitude: null,
+          formattedAddress: null,
+          enrichmentSnapshot: {
+            website: { provider: 'http-website-enrichment', fetchedAt: '2026-05-01T00:00:00.000Z' },
+            enrichedAt: '2026-05-01T00:00:00.001Z',
+            enrichmentVersion: 1,
+          },
+          deletedAt: null,
+        },
+      ],
+    });
+
+    const bundle = await repo([row]).loadCompanyEvidence(COMPANY_ID);
+    assert.ok(bundle !== null);
+    assert.equal(bundle.observations[0].websiteHttp, null);
+  });
+
+  it('does not fabricate metadata from malformed R6.2 fields', async () => {
+    const row = companyRow({
+      searchResults: [
+        {
+          id: 'r-1',
+          providerId: 'google-maps',
+          retrievedAt: date('2026-05-01T00:00:00.000Z'),
+          sourceUrl: null,
+          websiteDomain: 'acme.example',
+          latitude: null,
+          longitude: null,
+          formattedAddress: null,
+          enrichmentSnapshot: {
+            website: {
+              provider: 'http-website-enrichment',
+              fetchedAt: '2026-05-01T00:00:00.000Z',
+              httpStatus: '500',
+              httpRedirected: 'yes',
+              httpFinalUrl: '   ',
+              httpFinalSameOrigin: 1,
+            },
+            enrichedAt: '2026-05-01T00:00:00.001Z',
+            enrichmentVersion: 1,
+          },
+          deletedAt: null,
+        },
+      ],
+    });
+
+    const bundle = await repo([row]).loadCompanyEvidence(COMPANY_ID);
+    assert.ok(bundle !== null);
+    assert.equal(bundle.observations[0].websiteHttp, null);
+  });
+
+  it('treats an out-of-range HTTP status as unknown rather than a defect input', async () => {
+    const row = companyRow({
+      searchResults: [
+        {
+          id: 'r-1',
+          providerId: 'google-maps',
+          retrievedAt: date('2026-05-01T00:00:00.000Z'),
+          sourceUrl: null,
+          websiteDomain: 'acme.example',
+          latitude: null,
+          longitude: null,
+          formattedAddress: null,
+          enrichmentSnapshot: {
+            website: {
+              provider: 'http-website-enrichment',
+              fetchedAt: '2026-05-01T00:00:00.000Z',
+              httpStatus: 999,
+              httpFinalUrl: 'https://acme.example',
+              httpFinalSameOrigin: true,
+            },
+            enrichedAt: '2026-05-01T00:00:00.001Z',
+            enrichmentVersion: 1,
+          },
+          deletedAt: null,
+        },
+      ],
+    });
+
+    const bundle = await repo([row]).loadCompanyEvidence(COMPANY_ID);
+    assert.ok(bundle !== null);
+    assert.deepEqual(bundle.observations[0].websiteHttp, {
+      httpStatus: null,
+      httpRedirected: null,
+      httpFinalUrl: 'https://acme.example',
+      httpFinalSameOrigin: true,
+    });
+  });
 });

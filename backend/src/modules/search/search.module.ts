@@ -6,6 +6,7 @@ import { CompanyOpportunityAssessmentService } from './application/services/comp
 import { CompanyIntelligenceService } from './application/services/company-intelligence.service.js';
 import { EnrichmentEngine } from './application/services/enrichment-engine.js';
 import { CanonicalPromotionService } from './application/services/canonical-promotion.service.js';
+import { CompanyWebsiteDefectService } from './application/services/website-defect.service.js';
 import { EnrichSearchResultsUseCase } from './application/use-cases/enrich-search-results.usecase.js';
 import { GetCompanyGapAnalysisUseCase } from './application/use-cases/get-company-gap-analysis.usecase.js';
 import { GetCompanyOpportunityAssessmentUseCase } from './application/use-cases/get-company-opportunity-assessment.usecase.js';
@@ -15,6 +16,7 @@ import { GetExecutionResultsUseCase } from './application/use-cases/get-executio
 import { GetSearchHistoryUseCase } from './application/use-cases/get-search-history.usecase.js';
 import { RunDiscoveryUseCase } from './application/use-cases/run-discovery.usecase.js';
 import { SearchCompaniesUseCase } from './application/use-cases/search-companies.usecase.js';
+import { GetCompanyWebsiteDefectUseCase } from './application/use-cases/get-company-website-defect.usecase.js';
 import { ENRICHMENT_ENABLED } from './domain/tokens.js';
 import { CanonicalPromotionRepository } from './domain/ports/canonical-promotion.repository.js';
 import { CompanyEvidenceRepository } from './domain/ports/company-evidence.repository.js';
@@ -92,6 +94,7 @@ import { SearchController } from './presentation/controllers/search.controller.j
     CompanyIntelligenceService,
     CompanyGapAnalysisService,
     CompanyOpportunityAssessmentService,
+    CompanyWebsiteDefectService,
     SearchCompaniesUseCase,
     RunDiscoveryUseCase,
     GetSearchHistoryUseCase,
@@ -101,6 +104,7 @@ import { SearchController } from './presentation/controllers/search.controller.j
     GetCompanyIntelligenceUseCase,
     GetCompanyGapAnalysisUseCase,
     GetCompanyOpportunityAssessmentUseCase,
+    GetCompanyWebsiteDefectUseCase,
   ],
   exports: [
     EnrichmentEngine,
@@ -108,6 +112,7 @@ import { SearchController } from './presentation/controllers/search.controller.j
     GetCompanyIntelligenceUseCase,
     GetCompanyGapAnalysisUseCase,
     GetCompanyOpportunityAssessmentUseCase,
+    GetCompanyWebsiteDefectUseCase,
   ],
 })
 export class SearchModule {}

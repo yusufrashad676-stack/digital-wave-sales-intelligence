@@ -108,6 +108,23 @@ export interface WebsiteCapabilityObservation {
 }
 
 /**
+ * R6.2 root-website HTTP observation — factual metadata about the completed
+ * HTTPS root-page SafeFetcher response, parsed from the enrichment snapshot.
+ *
+ * Orthogonal to capability analysis: a non-OK response can carry no capability
+ * facts (`bodyAnalyzed` false) while still being positively evaluable for the
+ * narrow R6.2 HTTP defect classes. All fields are `null` in historical rows
+ * that predate the R6.2 marker; nothing here is ever inferred from other
+ * fields (`bodyAnalyzed`, `fetchedAt`, `reachable`, `https`).
+ */
+export interface WebsiteHttpObservation {
+  httpStatus: number | null;
+  httpRedirected: boolean | null;
+  httpFinalUrl: string | null;
+  httpFinalSameOrigin: boolean | null;
+}
+
+/**
  * Provider commercial signals observed alongside a discovery result.
  *
  * Read-only context: never an input to R4 verification, R5 gap states, or any
@@ -138,6 +155,7 @@ export interface CompanyObservationInput {
     verified: boolean;
   }>;
   websiteCapabilities?: WebsiteCapabilityObservation | null;
+  websiteHttp?: WebsiteHttpObservation | null;
   commercial?: CommercialObservation | null;
 }
 

@@ -175,6 +175,103 @@ describe('HttpWebsiteEnrichmentProvider', () => {
     assert.equal(result.data.title, null);
   });
 
+  it('persists HTTP 500 metadata while keeping bodyAnalyzed false', async () => {
+    const fetcher = async (url: string) => {
+      if (url.includes('robots.txt')) {
+        return mockTextResponse('User-agent: *\nAllow: /');
+      }
+      return mockHtmlResponse('', 500);
+    };
+
+    const provider = new HttpWebsiteEnrichmentProvider(defaultOptions, fetcher);
+    const result = await provider.enrich({ domain: 'example.com', timeoutMs: 5000 });
+
+    assert.equal(result.data.bodyAnalyzed, false);
+    assert.equal(result.data.httpStatus, 500);
+    assert.equal(result.data.httpRedirected, false);
+    assert.equal(result.data.httpFinalUrl, 'https://example.com');
+    assert.equal(result.data.httpFinalSameOrigin, true);
+  });
+
+  it('persists HTTP 404 metadata while keeping bodyAnalyzed false', async () => {
+    const fetcher = async (url: string) => {
+      if (url.includes('robots.txt')) {
+        return mockTextResponse('User-agent: *\nAllow: /');
+      }
+      return mockHtmlResponse('', 404);
+    };
+
+    const provider = new HttpWebsiteEnrichmentProvider(defaultOptions, fetcher);
+    const result = await provider.enrich({ domain: 'example.com', timeoutMs: 5000 });
+
+    assert.equal(result.data.bodyAnalyzed, false);
+    assert.equal(result.data.httpStatus, 404);
+    assert.equal(result.data.httpFinalUrl, 'https://example.com');
+    assert.equal(result.data.httpFinalSameOrigin, true);
+  });
+
+  it('persists HTTP 410 metadata while keeping bodyAnalyzed false', async () => {
+    const fetcher = async (url: string) => {
+      if (url.includes('robots.txt')) {
+        return mockTextResponse('User-agent: *\nAllow: /');
+      }
+      return mockHtmlResponse('', 410);
+    };
+
+    const provider = new HttpWebsiteEnrichmentProvider(defaultOptions, fetcher);
+    const result = await provider.enrich({ domain: 'example.com', timeoutMs: 5000 });
+
+    assert.equal(result.data.bodyAnalyzed, false);
+    assert.equal(result.data.httpStatus, 410);
+    assert.equal(result.data.httpFinalSameOrigin, true);
+  });
+
+  it('persists HTTP 200 metadata alongside analyzed capability fields', async () => {
+    const html = '<html><head><title>Acme</title></head></html>';
+    const fetcher = async (url: string) => {
+      if (url.includes('robots.txt')) {
+        return mockTextResponse('User-agent: *\nAllow: /');
+      }
+      return mockHtmlResponse(html);
+    };
+
+    const provider = new HttpWebsiteEnrichmentProvider(defaultOptions, fetcher);
+    const result = await provider.enrich({ domain: 'example.com', timeoutMs: 5000 });
+
+    assert.equal(result.data.bodyAnalyzed, true);
+    assert.equal(result.data.httpStatus, 200);
+    assert.equal(result.data.httpRedirected, false);
+    assert.equal(result.data.httpFinalUrl, 'https://example.com');
+    assert.equal(result.data.httpFinalSameOrigin, true);
+  });
+
+  it('persists redirect metadata for a same-origin redirected root response', async () => {
+    const html = '<html><head><title>Acme</title></head></html>';
+    const fetcher = async (url: string) => {
+      if (url.includes('robots.txt')) {
+        return mockTextResponse('User-agent: *\nAllow: /');
+      }
+      if (url === 'https://example.com') {
+        return {
+          ok: false,
+          status: 301,
+          headers: new Headers({ 'content-type': 'text/plain', location: 'https://example.com/' }),
+          body: null,
+        } as unknown as Response;
+      }
+      return mockHtmlResponse(html);
+    };
+
+    const provider = new HttpWebsiteEnrichmentProvider(defaultOptions, fetcher);
+    const result = await provider.enrich({ domain: 'example.com', timeoutMs: 5000 });
+
+    assert.equal(result.data.httpStatus, 200);
+    assert.equal(result.data.httpRedirected, true);
+    assert.equal(result.data.httpFinalUrl, 'https://example.com/');
+    assert.equal(result.data.httpFinalSameOrigin, true);
+    assert.equal(result.data.bodyAnalyzed, true);
+  });
+
   it('throws EnrichmentTimeoutError on timeout', async () => {
     const fetcher = async (url: string) => {
       if (url.includes('robots.txt')) {

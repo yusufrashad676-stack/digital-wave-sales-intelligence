@@ -137,6 +137,10 @@ export class HttpWebsiteEnrichmentProvider implements WebsiteEnrichmentPort {
           hasContactForm: false,
           bookingPageUrl: null,
           whatsappUrl: null,
+          httpStatus: fetchResult.status,
+          httpRedirected: fetchResult.redirected,
+          httpFinalUrl: fetchResult.finalUrl,
+          httpFinalSameOrigin: sameOrigin(url, fetchResult.finalUrl),
           fetchedAt: new Date().toISOString(),
           provider: PROVIDER_ID,
         },
@@ -169,10 +173,26 @@ export class HttpWebsiteEnrichmentProvider implements WebsiteEnrichmentPort {
         hasContactForm,
         bookingPageUrl,
         whatsappUrl,
+        httpStatus: fetchResult.status,
+        httpRedirected: fetchResult.redirected,
+        httpFinalUrl: fetchResult.finalUrl,
+        httpFinalSameOrigin: sameOrigin(url, fetchResult.finalUrl),
         fetchedAt: new Date().toISOString(),
         provider: PROVIDER_ID,
       },
     };
+  }
+}
+
+/**
+ * WHATWG URL-origin comparison required for R6.2 admissibility. Returns `null`
+ * when either URL does not parse; a null result is never treated as same-origin.
+ */
+export function sameOrigin(requestedUrl: string, finalUrl: string): boolean | null {
+  try {
+    return new URL(finalUrl).origin === new URL(requestedUrl).origin;
+  } catch {
+    return null;
   }
 }
 

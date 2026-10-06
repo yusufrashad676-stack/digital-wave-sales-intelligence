@@ -4,6 +4,7 @@ import {
   CompanyEvidenceBundle,
   CompanyObservationInput,
   WebsiteCapabilityObservation,
+  WebsiteHttpObservation,
 } from '../../domain/entities/company-intelligence.js';
 import { CompanyEvidenceRepository } from '../../domain/ports/company-evidence.repository.js';
 
@@ -183,6 +184,7 @@ function mapObservation(observed: {
     websiteCheckFailed: snapshot.websiteErrors.length > 0,
     websiteFetchedAt: snapshot.website?.fetchedAt ?? null,
     websiteCapabilities: snapshot.capabilities,
+    websiteHttp: snapshot.websiteHttp,
     commercial: {
       rating: observed.rating ?? null,
       ratingCount: observed.ratingCount ?? null,
@@ -204,6 +206,7 @@ interface ParsedSnapshot {
   websiteErrors: Array<{ type: string }>;
   socialProfiles: Array<{ platform: string; profileUrl: string; verified: boolean }>;
   capabilities: WebsiteCapabilityObservation | null;
+  websiteHttp: WebsiteHttpObservation | null;
 }
 
 function optionalString(value: unknown): string | null {
@@ -212,6 +215,17 @@ function optionalString(value: unknown): string | null {
 
 function optionalBoolean(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null;
+}
+
+/**
+ * A persisted R6.2 HTTP status is admissible only when it is a whole number in
+ * the HTTP status range (100..599). Anything else maps to null (unknown).
+ */
+function optionalHttpStatus(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isInteger(value)) {
+    return null;
+  }
+  return value >= 100 && value <= 599 ? value : null;
 }
 
 function parseCapabilities(website: Record<string, unknown> | null): WebsiteCapabilityObservation | null {
@@ -232,12 +246,31 @@ function parseCapabilities(website: Record<string, unknown> | null): WebsiteCapa
 }
 
 /**
+ * Parses the R6.2 root-website HTTP observation from a snapshot. Returns null
+ * when the snapshot is absent or carries no R6.2 HTTP fields (historical); it
+ * never synthesizes status, final URL, or same-origin from other fields.
+ */
+function parseHttpObservation(website: Record<string, unknown> | null): WebsiteHttpObservation | null {
+  if (website === null) {
+    return null;
+  }
+  const httpStatus = optionalHttpStatus(website.httpStatus);
+  const httpRedirected = optionalBoolean(website.httpRedirected);
+  const httpFinalUrl = optionalString(website.httpFinalUrl);
+  const httpFinalSameOrigin = optionalBoolean(website.httpFinalSameOrigin);
+  if (httpStatus === null && httpRedirected === null && httpFinalUrl === null && httpFinalSameOrigin === null) {
+    return null;
+  }
+  return { httpStatus, httpRedirected, httpFinalUrl, httpFinalSameOrigin };
+}
+
+/**
  * Defensive parse of the JSON enrichment snapshot. Returns a safe shape; an
  * unparseable snapshot is treated as "no enrichment observed".
  */
 function parseSnapshot(raw: unknown): ParsedSnapshot {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    return { website: null, websiteErrors: [], socialProfiles: [], capabilities: null };
+    return { website: null, websiteErrors: [], socialProfiles: [], capabilities: null, websiteHttp: null };
   }
 
   const record = raw as Record<string, unknown>;
@@ -271,5 +304,6 @@ function parseSnapshot(raw: unknown): ParsedSnapshot {
         verified: profile.verified === true,
       })),
     capabilities: parseCapabilities(websiteRecord),
+    websiteHttp: parseHttpObservation(websiteRecord),
   };
 }
